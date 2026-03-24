@@ -1,0 +1,4 @@
+interface:
+  display_name: "Earnings Chart Generator"
+  short_description: "Generate arbitrary-company earnings chart previews"
+  default_prompt: "Use $earnings-chart-generator to build a temporary local preview for an arbitrary-company earnings Sankey and revenue bar chart from a company request or an official filing link."

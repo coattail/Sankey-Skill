@@ -1,0 +1,995 @@
+{
+  "microsoft": {
+    "2024Q3": {
+      "mode": "pixel-replica",
+      "title": "Microsoft Q1 FY25 Income Statement",
+      "quarterSummary": "Q1 FY25",
+      "periodEndLabel": "Ending Sept. 2024",
+      "subtitle": "Reference preset rebuilt from the Microsoft case image, using the same bridge order and business-block layout.",
+      "companyLogoKey": "microsoft-corporate",
+      "revenueLabelMode": "center",
+      "showFooterBranding": true,
+      "footerCenterLabel": "appeconomyinsights.com",
+      "footerRightLabel": "APP ECONOMY INSIGHTS",
+      "layout": {
+        "revenueX": 734,
+        "grossX": 1124,
+        "opX": 1492,
+        "rightX": 1802,
+        "opexTargetX": 1778,
+        "rightLabelX": 1862,
+        "opexLabelX": 1842,
+        "belowLabelX": 1862,
+        "revenueLabelX": 708,
+        "revenueLabelY": 424,
+        "revenueLabelAnchor": "start",
+        "revenueLabelTitleSize": 34,
+        "revenueLabelValueSize": 52,
+        "revenueLabelNoteSize": 21,
+        "logoX": 680,
+        "logoY": 178,
+        "logoScale": 1.1,
+        "sourceNodeGap": 58,
+        "sourceNodeOffsets": [
+          0,
+          18,
+          82
+        ],
+        "grossNodeTop": 420,
+        "costNodeTop": 824,
+        "opNodeTop": 354,
+        "opexNodeTop": 676,
+        "netNodeTop": 292,
+        "opexSummaryX": 1612,
+        "opexSummaryY": 742,
+        "opexSummaryAnchor": "middle",
+        "footerMarkX": 104
+      },
+      "businessGroups": [
+        {
+          "name": "Productivity & Business Processes",
+          "displayLines": [
+            "Productivity &",
+            "Business Processes"
+          ],
+          "lockupKey": "microsoft-productivity",
+          "valueBn": 28.3,
+          "yoyPct": 12.0,
+          "operatingMarginPct": 58.0,
+          "nodeColor": "#1C9CDD",
+          "flowColor": "#7EC5EA"
+        },
+        {
+          "name": "Intelligent Cloud",
+          "displayLines": [
+            "Intelligent Cloud"
+          ],
+          "lockupKey": "microsoft-cloud",
+          "valueBn": 24.1,
+          "yoyPct": 20.0,
+          "operatingMarginPct": 44.0,
+          "nodeColor": "#FFBF00",
+          "flowColor": "#F8D97B"
+        },
+        {
+          "name": "More Personal Computing",
+          "displayLines": [
+            "More Personal",
+            "Computing"
+          ],
+          "lockupKey": "microsoft-personal",
+          "valueBn": 13.2,
+          "yoyPct": 17.0,
+          "operatingMarginPct": 27.0,
+          "nodeColor": "#7A7A7A",
+          "flowColor": "#C0C0C0"
+        }
+      ],
+      "revenueBn": 65.6,
+      "revenueYoyPct": 16.0,
+      "grossProfitBn": 45.5,
+      "grossMarginPct": 69.0,
+      "grossMarginYoyDeltaPp": 2.0,
+      "costOfRevenueBn": 20.1,
+      "operatingProfitBn": 30.6,
+      "operatingMarginPct": 47.0,
+      "operatingMarginYoyDeltaPp": 1.0,
+      "operatingExpensesBn": 14.9,
+      "netProfitBn": 24.7,
+      "netMarginPct": 38.0,
+      "netMarginYoyDeltaPp": 2.0,
+      "opexBreakdown": [
+        {
+          "name": "R&D",
+          "valueBn": 7.5,
+          "pctOfRevenue": 12.0,
+          "note": "12% of revenue (0pp) Y/Y",
+          "color": "#E60000"
+        },
+        {
+          "name": "S&M",
+          "valueBn": 5.7,
+          "pctOfRevenue": 9.0,
+          "note": "9% of revenue (0pp) Y/Y",
+          "color": "#E60000"
+        },
+        {
+          "name": "G&A",
+          "valueBn": 1.7,
+          "pctOfRevenue": 3.0,
+          "note": "3% of revenue (0pp) Y/Y",
+          "color": "#E60000"
+        }
+      ],
+      "belowOperatingItems": [
+        {
+          "name": "Tax",
+          "valueBn": 5.6,
+          "note": "",
+          "color": "#E00000"
+        },
+        {
+          "name": "Other",
+          "valueBn": 0.3,
+          "note": "",
+          "color": "#E00000"
+        }
+      ],
+      "footnote": "Pixel-replica reference preset for Microsoft FY25 Q1. Third-party watermark was intentionally removed."
+    }
+  },
+  "apple": {
+    "2025Q3": {
+      "mode": "pixel-replica",
+      "title": "Apple Q4 FY25 Income Statement",
+      "quarterSummary": "Q4 FY25",
+      "periodEndLabel": "Ending Sept. 2025",
+      "subtitle": "Apple preset rebuilt from the supplied sample layout.",
+      "companyLogoKey": "apple-corporate",
+      "revenueNodeColor": "#000000",
+      "revenueTextColor": "#111111",
+      "leftDetailGroups": [
+        {
+          "name": "iPhone",
+          "displayLines": [
+            "iPhone"
+          ],
+          "valueBn": 49.0,
+          "yoyPct": 6.0,
+          "targetName": "Products",
+          "nodeColor": "#000000",
+          "flowColor": "#9C9C9C",
+          "labelColor": "#111111"
+        },
+        {
+          "name": "Mac",
+          "displayLines": [
+            "Mac"
+          ],
+          "valueBn": 8.7,
+          "yoyPct": 13.0,
+          "targetName": "Products",
+          "nodeColor": "#000000",
+          "flowColor": "#9C9C9C",
+          "labelColor": "#111111",
+          "supportLines": [
+            "Air · Pro · Mini"
+          ]
+        },
+        {
+          "name": "iPad",
+          "displayLines": [
+            "iPad"
+          ],
+          "valueBn": 7.0,
+          "yoyPct": 0.0,
+          "targetName": "Products",
+          "nodeColor": "#000000",
+          "flowColor": "#9C9C9C",
+          "labelColor": "#111111"
+        },
+        {
+          "name": "Wearables",
+          "displayLines": [
+            "Watch & AirPods"
+          ],
+          "valueBn": 9.0,
+          "yoyPct": 0.0,
+          "targetName": "Products",
+          "nodeColor": "#000000",
+          "flowColor": "#9C9C9C",
+          "labelColor": "#111111",
+          "supportLines": [
+            "Home & accessories"
+          ]
+        }
+      ],
+      "businessGroups": [
+        {
+          "name": "Products",
+          "displayLines": [
+            "Products"
+          ],
+          "supportLines": [
+            "iPhone · Mac · iPad · Wearables"
+          ],
+          "valueBn": 73.7,
+          "yoyPct": 5.0,
+          "nodeColor": "#000000",
+          "flowColor": "#9C9C9C",
+          "labelColor": "#111111",
+          "valueColor": "#111111"
+        },
+        {
+          "name": "Services",
+          "displayLines": [
+            "Services"
+          ],
+          "supportLines": [
+            "TV · iCloud · Music · App Store"
+          ],
+          "valueBn": 28.8,
+          "yoyPct": 15.0,
+          "nodeColor": "#000000",
+          "flowColor": "#9C9C9C",
+          "labelColor": "#111111",
+          "valueColor": "#111111"
+        }
+      ],
+      "revenueBn": 102.5,
+      "revenueYoyPct": 8.0,
+      "grossProfitBn": 48.3,
+      "grossMarginPct": 47.0,
+      "grossMarginYoyDeltaPp": 1.0,
+      "costOfRevenueBn": 54.1,
+      "operatingProfitBn": 32.4,
+      "operatingMarginPct": 32.0,
+      "operatingMarginYoyDeltaPp": 0.0,
+      "operatingExpensesBn": 15.9,
+      "netProfitBn": 27.5,
+      "netMarginPct": 27.0,
+      "netMarginYoyDeltaPp": 1.0,
+      "costBreakdown": [
+        {
+          "name": "Products",
+          "valueBn": 47.0,
+          "note": "36% gross margin"
+        },
+        {
+          "name": "Services",
+          "valueBn": 7.1,
+          "note": "75% gross margin"
+        }
+      ],
+      "opexBreakdown": [
+        {
+          "name": "R&D",
+          "valueBn": 8.9,
+          "note": "9% of revenue +0pp Y/Y",
+          "color": "#E00000"
+        },
+        {
+          "name": "SG&A",
+          "valueBn": 7.0,
+          "note": "7% of revenue +0pp Y/Y",
+          "color": "#E00000"
+        }
+      ],
+      "positiveAdjustments": [
+        {
+          "name": "Other",
+          "valueBn": 0.4
+        }
+      ],
+      "belowOperatingItems": [
+        {
+          "name": "Tax",
+          "valueBn": 5.3,
+          "note": "",
+          "color": "#E00000"
+        }
+      ],
+      "footnote": "Apple FY25 Q4 replica preset reconstructed from the provided sample image."
+    }
+  },
+  "meta": {
+    "2025Q3": {
+      "mode": "pixel-replica",
+      "title": "Meta Q3 FY25 Income Statement",
+      "quarterSummary": "Q3 FY25",
+      "periodEndLabel": "Ending Sept. 2025",
+      "subtitle": "Meta preset rebuilt from the supplied sample layout.",
+      "companyLogoKey": "meta-corporate",
+      "revenueNodeColor": "#365DD9",
+      "revenueTextColor": "#29508F",
+      "leftDetailGroups": [
+        {
+          "name": "Advertising",
+          "displayLines": [
+            "Advertising"
+          ],
+          "valueBn": 50.1,
+          "yoyPct": 25.0,
+          "targetName": "Family of Apps",
+          "nodeColor": "#365DD9",
+          "flowColor": "#97ACE5",
+          "labelColor": "#29508F"
+        },
+        {
+          "name": "Other",
+          "displayLines": [
+            "Other"
+          ],
+          "valueBn": 0.7,
+          "yoyPct": 59.0,
+          "targetName": "Family of Apps",
+          "nodeColor": "#365DD9",
+          "flowColor": "#B7C8F7",
+          "labelColor": "#29508F",
+          "supportLines": [
+            "Payments infrastructure"
+          ]
+        }
+      ],
+      "businessGroups": [
+        {
+          "name": "Family of Apps",
+          "displayLines": [
+            "Family of Apps",
+            "(FoA)"
+          ],
+          "supportLines": [
+            "Facebook · Instagram ·",
+            "WhatsApp · Messenger"
+          ],
+          "valueBn": 50.8,
+          "yoyPct": 26.0,
+          "nodeColor": "#365DD9",
+          "flowColor": "#97ACE5",
+          "labelColor": "#29508F",
+          "valueColor": "#29508F"
+        },
+        {
+          "name": "Reality Labs",
+          "displayLines": [
+            "Reality Labs",
+            "(RL)"
+          ],
+          "supportLines": [
+            "Meta Quest"
+          ],
+          "valueBn": 0.5,
+          "yoyPct": 74.0,
+          "nodeColor": "#365DD9",
+          "flowColor": "#B7C8F7",
+          "labelColor": "#29508F",
+          "valueColor": "#29508F"
+        }
+      ],
+      "revenueBn": 51.2,
+      "revenueYoyPct": 26.0,
+      "grossProfitBn": 42.0,
+      "grossMarginPct": 82.0,
+      "grossMarginYoyDeltaPp": 0.0,
+      "costOfRevenueBn": 9.2,
+      "operatingProfitBn": 20.5,
+      "operatingMarginPct": 40.0,
+      "operatingMarginYoyDeltaPp": -3.0,
+      "operatingExpensesBn": 21.5,
+      "netProfitBn": 2.7,
+      "netMarginPct": 5.0,
+      "netMarginYoyDeltaPp": -33.0,
+      "opexBreakdown": [
+        {
+          "name": "R&D",
+          "valueBn": 15.1,
+          "note": "30% of revenue +2pp Y/Y",
+          "color": "#E00000"
+        },
+        {
+          "name": "G&A",
+          "valueBn": 3.5,
+          "note": "7% of revenue +2pp Y/Y",
+          "color": "#E00000"
+        },
+        {
+          "name": "S&M",
+          "valueBn": 2.8,
+          "note": "6% of revenue (1pp) Y/Y",
+          "color": "#E00000"
+        }
+      ],
+      "positiveAdjustments": [
+        {
+          "name": "Other",
+          "valueBn": 1.1
+        }
+      ],
+      "belowOperatingItems": [
+        {
+          "name": "Tax",
+          "valueBn": 18.9,
+          "note": "",
+          "color": "#E00000"
+        }
+      ],
+      "footnote": "Meta FY25 Q3 replica preset reconstructed from the provided sample image."
+    }
+  },
+  "alphabet": {
+    "2025Q3": {
+      "mode": "pixel-replica",
+      "title": "Alphabet Q3 FY25 Income Statement",
+      "quarterSummary": "Q3 FY25",
+      "periodEndLabel": "Ending Sept. 2025",
+      "subtitle": "Alphabet preset rebuilt from the supplied sample layout.",
+      "companyLogoKey": "alphabet-corporate",
+      "revenueNodeColor": "#4F76E8",
+      "revenueTextColor": "#4F76E8",
+      "costLabel": "Cost of revenues",
+      "leftDetailGroups": [
+        {
+          "name": "Search advertising",
+          "displayLines": [
+            "Search",
+            "advertising"
+          ],
+          "valueBn": 56.6,
+          "yoyPct": 15.0,
+          "targetName": "Ad Revenue",
+          "nodeColor": "#4F76E8",
+          "flowColor": "#A9BDF6",
+          "labelColor": "#4F76E8"
+        },
+        {
+          "name": "YouTube",
+          "displayLines": [
+            "YouTube"
+          ],
+          "valueBn": 10.3,
+          "yoyPct": 15.0,
+          "targetName": "Ad Revenue",
+          "nodeColor": "#4F76E8",
+          "flowColor": "#A9BDF6",
+          "labelColor": "#111111"
+        },
+        {
+          "name": "AdMob",
+          "displayLines": [
+            "AdMob"
+          ],
+          "valueBn": 7.4,
+          "yoyPct": -3.0,
+          "targetName": "Ad Revenue",
+          "nodeColor": "#4F76E8",
+          "flowColor": "#A9BDF6",
+          "labelColor": "#70757A",
+          "supportLines": [
+            "AdSense & Manager"
+          ]
+        }
+      ],
+      "businessGroups": [
+        {
+          "name": "Ad Revenue",
+          "displayLines": [
+            "Ad Revenue"
+          ],
+          "supportLines": [
+            "Search · YouTube · AdMob"
+          ],
+          "valueBn": 74.2,
+          "yoyPct": 13.0,
+          "nodeColor": "#4F76E8",
+          "flowColor": "#A9BDF6",
+          "labelColor": "#4F76E8",
+          "valueColor": "#4F76E8"
+        },
+        {
+          "name": "Google Play",
+          "displayLines": [
+            "Google Play"
+          ],
+          "supportLines": [
+            "Fitbit · Nest · Pixel ·",
+            "YouTube Premium & TV"
+          ],
+          "valueBn": 12.9,
+          "yoyPct": 21.0,
+          "nodeColor": "#F9C021",
+          "flowColor": "#F7E097",
+          "labelColor": "#F0B41A",
+          "valueColor": "#F0B41A"
+        },
+        {
+          "name": "Google Cloud",
+          "displayLines": [
+            "Google Cloud"
+          ],
+          "supportLines": [
+            "Workspace · Enterprise Android ·",
+            "Chrome OS · Other APIs"
+          ],
+          "valueBn": 15.2,
+          "yoyPct": 34.0,
+          "nodeColor": "#F9C021",
+          "flowColor": "#F7E097",
+          "labelColor": "#F0B41A",
+          "valueColor": "#F0B41A"
+        },
+        {
+          "name": "Other",
+          "displayLines": [
+            "Other"
+          ],
+          "valueBn": 0.1,
+          "yoyPct": 0.0,
+          "nodeColor": "#F9C021",
+          "flowColor": "#F7E097",
+          "labelColor": "#F0B41A",
+          "valueColor": "#F0B41A"
+        }
+      ],
+      "revenueBn": 102.3,
+      "revenueYoyPct": 16.0,
+      "grossProfitBn": 61.0,
+      "grossMarginPct": 60.0,
+      "grossMarginYoyDeltaPp": 1.0,
+      "costOfRevenueBn": 41.4,
+      "operatingProfitBn": 31.2,
+      "operatingMarginPct": 31.0,
+      "operatingMarginYoyDeltaPp": -2.0,
+      "operatingExpensesBn": 29.7,
+      "netProfitBn": 35.0,
+      "netMarginPct": 34.0,
+      "netMarginYoyDeltaPp": 4.0,
+      "opexBreakdown": [
+        {
+          "name": "R&D",
+          "valueBn": 15.2,
+          "note": "15% of revenue +1pp Y/Y",
+          "color": "#E00000"
+        },
+        {
+          "name": "G&A",
+          "valueBn": 7.4,
+          "note": "7% of revenue +3pp Y/Y",
+          "color": "#E00000"
+        },
+        {
+          "name": "S&M",
+          "valueBn": 7.2,
+          "note": "7% of revenue (1pp) Y/Y",
+          "color": "#E00000"
+        }
+      ],
+      "positiveAdjustments": [
+        {
+          "name": "Other",
+          "valueBn": 12.8
+        }
+      ],
+      "belowOperatingItems": [
+        {
+          "name": "Tax",
+          "valueBn": 9.0,
+          "note": "",
+          "color": "#E00000"
+        }
+      ],
+      "footnote": "Alphabet FY25 Q3 replica preset reconstructed from the provided sample image."
+    }
+  },
+  "nvidia": {
+    "2025Q2": {
+      "mode": "pixel-replica",
+      "title": "NVIDIA Q2 FY26 Income Statement",
+      "quarterSummary": "Q2 FY26",
+      "periodEndLabel": "Ending July 2025",
+      "subtitle": "NVIDIA preset rebuilt from the supplied sample layout.",
+      "companyLogoKey": "nvidia-corporate",
+      "compactSourceLabels": true,
+      "revenueNodeColor": "#000000",
+      "revenueTextColor": "#111111",
+      "businessGroups": [
+        {
+          "name": "Data Center",
+          "displayLines": [
+            "Data Center"
+          ],
+          "valueBn": 41.1,
+          "yoyPct": 56.0,
+          "nodeColor": "#388260",
+          "flowColor": "#A5C1B7",
+          "labelColor": "#388260",
+          "valueColor": "#388260"
+        },
+        {
+          "name": "Gaming",
+          "displayLines": [
+            "Gaming"
+          ],
+          "valueBn": 4.2,
+          "yoyPct": 49.0,
+          "nodeColor": "#B9DB59",
+          "flowColor": "#CBE88B",
+          "labelColor": "#8AB022",
+          "valueColor": "#8AB022"
+        },
+        {
+          "name": "Professional Visualization",
+          "displayLines": [
+            "Professional",
+            "Visualization"
+          ],
+          "valueBn": 0.6,
+          "yoyPct": 32.0,
+          "nodeColor": "#5C36AE",
+          "flowColor": "#A388D2",
+          "labelColor": "#4B2397",
+          "valueColor": "#4B2397"
+        },
+        {
+          "name": "Automotive",
+          "displayLines": [
+            "Automotive"
+          ],
+          "valueBn": 0.6,
+          "yoyPct": 69.0,
+          "nodeColor": "#4D7FE3",
+          "flowColor": "#9AB9F4",
+          "labelColor": "#3F70D0",
+          "valueColor": "#3F70D0"
+        },
+        {
+          "name": "OEM & Other",
+          "displayLines": [
+            "OEM & Other"
+          ],
+          "valueBn": 0.2,
+          "yoyPct": 97.0,
+          "nodeColor": "#7D1B53",
+          "flowColor": "#C894AF",
+          "labelColor": "#6B1445",
+          "valueColor": "#6B1445"
+        }
+      ],
+      "revenueBn": 46.7,
+      "revenueYoyPct": 56.0,
+      "grossProfitBn": 33.9,
+      "grossMarginPct": 72.0,
+      "grossMarginYoyDeltaPp": -3.0,
+      "costOfRevenueBn": 12.9,
+      "operatingProfitBn": 28.4,
+      "operatingMarginPct": 61.0,
+      "operatingMarginYoyDeltaPp": -1.0,
+      "operatingExpensesBn": 5.4,
+      "netProfitBn": 26.4,
+      "netMarginPct": 57.0,
+      "netMarginYoyDeltaPp": 1.0,
+      "opexBreakdown": [
+        {
+          "name": "Research & Development",
+          "valueBn": 4.3,
+          "note": "9% of revenue (1pp) Y/Y",
+          "color": "#E00000"
+        },
+        {
+          "name": "Sales, General & Admin",
+          "valueBn": 1.1,
+          "note": "2% of revenue (0pp) Y/Y",
+          "color": "#E00000"
+        }
+      ],
+      "positiveAdjustments": [
+        {
+          "name": "Other",
+          "valueBn": 2.8
+        }
+      ],
+      "belowOperatingItems": [
+        {
+          "name": "Tax",
+          "valueBn": 4.8,
+          "note": "",
+          "color": "#E00000"
+        }
+      ],
+      "footnote": "NVIDIA FY26 Q2 replica preset reconstructed from the provided sample image."
+    }
+  },
+  "tesla": {
+    "2024Q1": {
+      "mode": "pixel-replica",
+      "title": "Tesla Q1 FY24 Income Statement",
+      "quarterSummary": "Q1 FY24",
+      "periodEndLabel": "Ending Mar. 2024",
+      "subtitle": "Tesla preset rebuilt from the supplied sample layout.",
+      "companyLogoKey": "tesla-corporate",
+      "compactSourceLabels": true,
+      "revenueNodeColor": "#000000",
+      "revenueTextColor": "#111111",
+      "businessGroups": [
+        {
+          "name": "Auto",
+          "displayLines": [
+            "Auto"
+          ],
+          "supportLines": [
+            "Auto sales"
+          ],
+          "valueBn": 17.4,
+          "yoyPct": -13.0,
+          "nodeColor": "#000000",
+          "flowColor": "#979797",
+          "labelColor": "#111111",
+          "valueColor": "#111111"
+        },
+        {
+          "name": "Regulatory credits",
+          "displayLines": [
+            "Regulatory credits"
+          ],
+          "valueBn": 0.4,
+          "yoyPct": -15.0,
+          "nodeColor": "#000000",
+          "flowColor": "#979797",
+          "labelColor": "#111111",
+          "valueColor": "#111111"
+        },
+        {
+          "name": "Leasing",
+          "displayLines": [
+            "Leasing"
+          ],
+          "valueBn": 0.5,
+          "yoyPct": -16.0,
+          "nodeColor": "#000000",
+          "flowColor": "#979797",
+          "labelColor": "#111111",
+          "valueColor": "#111111"
+        },
+        {
+          "name": "Energy generation & storage",
+          "displayLines": [
+            "Energy generation",
+            "& storage"
+          ],
+          "valueBn": 1.6,
+          "yoyPct": 7.0,
+          "nodeColor": "#000000",
+          "flowColor": "#979797",
+          "labelColor": "#111111",
+          "valueColor": "#111111"
+        },
+        {
+          "name": "Services",
+          "displayLines": [
+            "Services"
+          ],
+          "valueBn": 2.3,
+          "yoyPct": 25.0,
+          "nodeColor": "#000000",
+          "flowColor": "#979797",
+          "labelColor": "#111111",
+          "valueColor": "#111111"
+        }
+      ],
+      "revenueBn": 21.3,
+      "revenueYoyPct": -9.0,
+      "grossProfitBn": 3.7,
+      "grossMarginPct": 17.0,
+      "grossMarginYoyDeltaPp": -2.0,
+      "costOfRevenueBn": 17.6,
+      "operatingProfitBn": 1.2,
+      "operatingMarginPct": 5.0,
+      "operatingMarginYoyDeltaPp": -6.0,
+      "operatingExpensesBn": 2.5,
+      "netProfitBn": 1.1,
+      "netMarginPct": 5.0,
+      "netMarginYoyDeltaPp": -6.0,
+      "opexBreakdown": [
+        {
+          "name": "SG&A",
+          "valueBn": 1.4,
+          "note": "6% of revenue",
+          "color": "#E00000"
+        },
+        {
+          "name": "R&D",
+          "valueBn": 1.2,
+          "note": "5% of revenue",
+          "color": "#E00000"
+        }
+      ],
+      "positiveAdjustments": [
+        {
+          "name": "Other",
+          "valueBn": 0.4
+        }
+      ],
+      "belowOperatingItems": [
+        {
+          "name": "Tax",
+          "valueBn": 0.4,
+          "note": "",
+          "color": "#E00000"
+        }
+      ],
+      "footnote": "Tesla FY24 Q1 replica preset reconstructed from the provided sample image."
+    }
+  },
+  "amazon": {
+    "2025Q3": {
+      "mode": "pixel-replica",
+      "title": "Amazon Q3 FY25 Income Statement",
+      "quarterSummary": "Q3 FY25",
+      "periodEndLabel": "Ending Sept. 2025",
+      "subtitle": "Amazon preset rebuilt from the supplied sample layout.",
+      "companyLogoKey": "amazon-corporate",
+      "compactSourceLabels": true,
+      "revenueNodeColor": "#F89E1B",
+      "revenueTextColor": "#111111",
+      "costLabel": "Cost of sales",
+      "businessGroups": [
+        {
+          "name": "Online Stores",
+          "displayLines": [
+            "Online Stores"
+          ],
+          "supportLines": [
+            "amazon.com"
+          ],
+          "valueBn": 67.4,
+          "yoyPct": 10.0,
+          "nodeColor": "#F89E1B",
+          "flowColor": "#F4CB94",
+          "labelColor": "#111111",
+          "valueColor": "#111111"
+        },
+        {
+          "name": "Physical Store",
+          "displayLines": [
+            "Physical Store"
+          ],
+          "supportLines": [
+            "Fresh · Whole Foods"
+          ],
+          "valueBn": 5.6,
+          "yoyPct": 7.0,
+          "nodeColor": "#F89E1B",
+          "flowColor": "#F4CB94",
+          "labelColor": "#111111",
+          "valueColor": "#111111"
+        },
+        {
+          "name": "3rd party sellers services",
+          "displayLines": [
+            "3rd party sellers",
+            "services"
+          ],
+          "valueBn": 42.5,
+          "yoyPct": 12.0,
+          "nodeColor": "#F89E1B",
+          "flowColor": "#F4CB94",
+          "labelColor": "#111111",
+          "valueColor": "#111111"
+        },
+        {
+          "name": "Advertising",
+          "displayLines": [
+            "Advertising"
+          ],
+          "supportLines": [
+            "Amazon Ads · Twitch"
+          ],
+          "valueBn": 17.7,
+          "yoyPct": 24.0,
+          "nodeColor": "#F89E1B",
+          "flowColor": "#F4CB94",
+          "labelColor": "#111111",
+          "valueColor": "#111111"
+        },
+        {
+          "name": "Subscription",
+          "displayLines": [
+            "Subscription"
+          ],
+          "supportLines": [
+            "Prime · Audible"
+          ],
+          "valueBn": 12.6,
+          "yoyPct": 11.0,
+          "nodeColor": "#F89E1B",
+          "flowColor": "#F4CB94",
+          "labelColor": "#111111",
+          "valueColor": "#111111"
+        },
+        {
+          "name": "AWS",
+          "displayLines": [
+            "AWS"
+          ],
+          "valueBn": 33.0,
+          "yoyPct": 20.0,
+          "nodeColor": "#F89E1B",
+          "flowColor": "#F4CB94",
+          "labelColor": "#111111",
+          "valueColor": "#111111"
+        },
+        {
+          "name": "Other",
+          "displayLines": [
+            "Other"
+          ],
+          "valueBn": 1.4,
+          "yoyPct": 8.0,
+          "nodeColor": "#F89E1B",
+          "flowColor": "#F4CB94",
+          "labelColor": "#111111",
+          "valueColor": "#111111"
+        }
+      ],
+      "revenueBn": 180.2,
+      "revenueYoyPct": 13.0,
+      "grossProfitBn": 91.5,
+      "grossMarginPct": 52.0,
+      "grossMarginYoyDeltaPp": 2.0,
+      "costOfRevenueBn": 88.7,
+      "operatingProfitBn": 17.4,
+      "operatingMarginPct": 10.0,
+      "operatingMarginYoyDeltaPp": 0.0,
+      "operatingExpensesBn": 74.1,
+      "netProfitBn": 21.2,
+      "netMarginPct": 12.0,
+      "netMarginYoyDeltaPp": 3.0,
+      "opexBreakdown": [
+        {
+          "name": "Technology & content",
+          "valueBn": 29.0,
+          "note": "16% of revenue +2pp Y/Y",
+          "color": "#E00000"
+        },
+        {
+          "name": "Fulfillment",
+          "valueBn": 27.7,
+          "note": "15% of revenue +1pp Y/Y",
+          "color": "#E00000"
+        },
+        {
+          "name": "S&M",
+          "valueBn": 11.7,
+          "note": "6% of revenue (0pp) Y/Y",
+          "color": "#E00000"
+        },
+        {
+          "name": "G&A",
+          "valueBn": 2.9,
+          "note": "2% of revenue (0pp) Y/Y",
+          "color": "#E00000"
+        },
+        {
+          "name": "Other opex",
+          "valueBn": 2.9,
+          "note": "2% of revenue (0pp) Y/Y",
+          "color": "#E00000"
+        }
+      ],
+      "positiveAdjustments": [
+        {
+          "name": "Other",
+          "valueBn": 10.7
+        }
+      ],
+      "belowOperatingItems": [
+        {
+          "name": "Tax",
+          "valueBn": 6.9,
+          "note": "",
+          "color": "#E00000"
+        }
+      ],
+      "footnote": "Amazon FY25 Q3 replica preset reconstructed from the provided sample image."
+    }
+  }
+}

@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>财报图片生成台</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Marcellus&family=Noto+Sans+SC:wght@400;500;700;800&display=swap"
+      onload="this.onload=null;this.rel='stylesheet'"
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Marcellus&family=Noto+Sans+SC:wght@400;500;700;800&display=swap"
+      />
+    </noscript>
+    <link rel="stylesheet" href="style.css?v=20260323-exact-growth-and-logo-trim-v119" />
+    <script defer src="js/app-00-foundation.js?v=20260323-exact-growth-and-logo-trim-v119"></script>
+    <script defer src="js/app-01-layout.js?v=20260323-exact-growth-and-logo-trim-v119"></script>
+    <script defer src="js/app-02-sankey.js?v=20260323-exact-growth-and-logo-trim-v119"></script>
+    <script defer src="js/app-03-data.js?v=20260324-bar-taxonomy-alias-v121"></script>
+    <script defer src="js/app-04-bootstrap.js?v=20260324-bar-logo-collision-v122"></script>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <p class="eyebrow">Any Company • Any Quarter</p>
+        <h1>财报图片生成台</h1>
+      </section>
+
+      <section class="workspace">
+        <aside class="controls">
+          <h2>设置</h2>
+
+          <div id="companySelectionBlock" class="control-block">
+            <div class="block-head">
+              <h3 id="companySelectionTitle">公司</h3>
+              <span id="companyCountPill" class="status-pill">-</span>
+            </div>
+            <input
+              id="companySearch"
+              class="asset-search"
+              type="search"
+              placeholder="搜索公司、中文名或 ticker"
+              aria-label="搜索公司"
+            />
+            <div id="companyList" class="company-list" aria-label="公司选择"></div>
+          </div>
+
+          <div class="control-block">
+            <h3>季度</h3>
+            <label>
+              <select id="quarterSelect" aria-label="季度选择"></select>
+            </label>
+            <p id="quarterHint" class="analysis-hint">-</p>
+          </div>
+
+          <div class="control-block">
+            <h3>导出</h3>
+            <div class="actions-row">
+              <button id="downloadSvgBtn" class="analysis-btn" type="button">下载 SVG</button>
+              <button id="downloadPngBtn" class="analysis-btn" type="button">下载 PNG</button>
+            </div>
+            <p class="analysis-hint">PNG 会在本地浏览器里按当前 SVG 原始画布尺寸导出，不依赖额外服务。</p>
+          </div>
+
+          <div class="control-block actions">
+            <button id="renderBtn" class="primary-btn" type="button">一键生成</button>
+            <p id="statusText" class="status">正在加载数据...</p>
+          </div>
+        </aside>
+
+        <section class="chart-zone">
+          <div class="chart-head">
+            <div>
+              <h2 id="chartTitle">营收与开支可视化图</h2>
+              <p id="chartMeta">-</p>
+            </div>
+            <div class="chart-head-actions">
+              <div class="chart-tools">
+                <button id="chartModeToggleBtn" class="analysis-btn chart-mode-btn" type="button">切换到柱状图</button>
+                <div id="chartEditGroup" class="chart-edit-group">
+                  <button id="editImageBtn" class="analysis-btn chart-edit-btn" type="button">编辑图片</button>
+                  <button id="resetImageBtn" class="analysis-btn chart-reset-btn" type="button">回到默认</button>
+                </div>
+                <label class="language-switch" for="languageSelect">
+                  <span>语言</span>
+                  <select id="languageSelect" aria-label="图表语言">
+                    <option value="zh">中文</option>
+                    <option value="en">English</option>
+                  </select>
+                </label>
+                <button id="downloadHdBtn" class="analysis-btn chart-download-btn" type="button">下载超清图片</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="preview-toolbar">
+            <div class="toolbar-item">
+              <span>公司</span>
+              <strong id="toolbarCompany">-</strong>
+            </div>
+            <div class="toolbar-item">
+              <span>季度</span>
+              <strong id="toolbarQuarter">-</strong>
+            </div>
+            <div class="toolbar-item">
+              <span id="toolbarUpdatedLabel">数据更新</span>
+              <strong id="toolbarUpdatedAt">-</strong>
+            </div>
+          </div>
+
+          <div class="preview-stage">
+            <div id="previewCanvas" class="preview-canvas">
+              <div id="chartOutput" class="chart-output"></div>
+            </div>
+          </div>
+
+          <div class="detail-grid">
+            <article class="detail-card">
+              <span>业务分部</span>
+              <strong id="detailSegmentCount">-</strong>
+              <p id="detailSegmentNote">-</p>
+            </article>
+            <article class="detail-card">
+              <span>利润桥主干</span>
+              <strong id="detailStatementSummary">-</strong>
+              <p id="detailStatementNote">-</p>
+            </article>
+            <article class="detail-card">
+              <span>数据口径</span>
+              <strong id="detailSourceTitle">-</strong>
+              <p id="detailSourceNote">-</p>
+            </article>
+          </div>
+
+          <p id="footnoteText" class="footnote">-</p>
+        </section>
+      </section>
+    </main>
+  </body>
+</html>

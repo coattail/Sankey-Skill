@@ -1,0 +1,15 @@
+{
+  "generatedAt": "",
+  "universeSource": {
+    "label": "standalone-placeholder",
+    "url": "",
+    "as_of": "",
+    "note": "Placeholder dataset for the standalone project root."
+  },
+  "companyCount": 0,
+  "notes": [
+    "Run scripts/build_single_company_preview.py to generate a real single-company preview workspace."
+  ],
+  "companies": [],
+  "failures": []
+}

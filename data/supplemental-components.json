@@ -1,0 +1,233 @@
+{
+  "apple": {
+    "_default": {
+      "costBreakdownProfile": {
+        "segmentOrder": [
+          "Products",
+          "Services"
+        ],
+        "fixedGrossMarginPctBySegment": {
+          "Services": 75
+        },
+        "valueFormat": "negative-parentheses",
+        "sourceLabel": "Apple supplemental cost profile"
+      }
+    }
+  },
+  "alphabet": {
+    "2024Q1": {
+      "trafficAcquisitionCostBn": 12.946,
+      "otherCostOfRevenueBn": 20.766,
+      "sourceLabel": "Alphabet EX-99.1 earnings release",
+      "sourceUrl": "https://www.sec.gov/Archives/edgar/data/1652044/000165204424000047/googexhibit991q12024.htm"
+    },
+    "2024Q2": {
+      "trafficAcquisitionCostBn": 13.387,
+      "otherCostOfRevenueBn": 22.12,
+      "sourceLabel": "Alphabet EX-99.1 earnings release",
+      "sourceUrl": "https://www.sec.gov/Archives/edgar/data/1652044/000165204424000076/googexhibit991q22024.htm"
+    },
+    "2024Q3": {
+      "trafficAcquisitionCostBn": 13.719,
+      "otherCostOfRevenueBn": 22.755,
+      "sourceLabel": "Alphabet EX-99.1 earnings release",
+      "sourceUrl": "https://www.sec.gov/Archives/edgar/data/1652044/000165204424000115/googexhibit991q32024.htm"
+    },
+    "2024Q4": {
+      "trafficAcquisitionCostBn": 14.848,
+      "otherCostOfRevenueBn": 25.765,
+      "sourceLabel": "Alphabet EX-99.1 earnings release",
+      "sourceUrl": "https://www.sec.gov/Archives/edgar/data/1652044/000165204425000010/googexhibit991q42024.htm"
+    },
+    "2025Q1": {
+      "trafficAcquisitionCostBn": 13.748,
+      "otherCostOfRevenueBn": 22.613,
+      "sourceLabel": "Alphabet EX-99.1 earnings release",
+      "sourceUrl": "https://www.sec.gov/Archives/edgar/data/1652044/000165204425000040/googexhibit991q12025.htm"
+    },
+    "2025Q2": {
+      "trafficAcquisitionCostBn": 14.705,
+      "otherCostOfRevenueBn": 24.334,
+      "sourceLabel": "Alphabet EX-99.1 earnings release",
+      "sourceUrl": "https://www.sec.gov/Archives/edgar/data/1652044/000165204425000056/googexhibit991q22025.htm"
+    },
+    "2025Q3": {
+      "trafficAcquisitionCostBn": 14.858,
+      "otherCostOfRevenueBn": 26.511,
+      "sourceLabel": "Alphabet supplemental filing",
+      "sourceUrl": "https://www.sec.gov/Archives/edgar/data/1652044/000165204425000091/ex99-1q3242025.htm"
+    },
+    "2025Q4": {
+      "trafficAcquisitionCostBn": 16.597,
+      "otherCostOfRevenueBn": 29.169,
+      "sourceLabel": "Alphabet EX-99.1 earnings release",
+      "sourceUrl": "https://www.sec.gov/Archives/edgar/data/1652044/000165204426000012/googexhibit991q42025.htm"
+    }
+  },
+  "tsmc": {
+    "_default": {
+      "sourceLabel": "TSMC consolidated quarterly financial statements"
+    },
+    "2018Q1": {
+      "rndBn": 20.429,
+      "sgnaBn": 6.3,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/english/2018/Q1/FS.pdf"
+    },
+    "2018Q2": {
+      "rndBn": 19.891,
+      "sgnaBn": 6.548,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/english/2018/Q2/FS.pdf"
+    },
+    "2018Q3": {
+      "rndBn": 21.886,
+      "sgnaBn": 6.243,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/english/2018/Q3/FS.pdf"
+    },
+    "2018Q4": {
+      "rndBn": 23.689,
+      "sgnaBn": 7.163,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/english/2018/Q4/FS.pdf"
+    },
+    "2019Q1": {
+      "rndBn": 20.417,
+      "sgnaBn": 5.601,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/english/2019/Q1/FS.pdf"
+    },
+    "2019Q2": {
+      "rndBn": 21.394,
+      "sgnaBn": 5.771,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/english/2019/Q2/FS.pdf"
+    },
+    "2019Q3": {
+      "rndBn": 23.972,
+      "sgnaBn": 7.407,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/english/2019/Q3/FS.pdf"
+    },
+    "2019Q4": {
+      "rndBn": 25.636,
+      "sgnaBn": 9.307,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/english/2019/Q4/FS.pdf"
+    },
+    "2020Q1": {
+      "rndBn": 24.969,
+      "sgnaBn": 7.354,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/qr/phase5_support/FS.pdf"
+    },
+    "2020Q2": {
+      "rndBn": 24.893,
+      "sgnaBn": 8.628,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/qr/phase5_support/FS_0.pdf"
+    },
+    "2020Q3": {
+      "rndBn": 29.684,
+      "sgnaBn": 11.207,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/qr/phase5_support/FS_4.pdf"
+    },
+    "2020Q4": {
+      "rndBn": 29.94,
+      "sgnaBn": 8.381,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/reports/2021-02/FS_7.pdf"
+    },
+    "2021Q1": {
+      "rndBn": 30.756,
+      "sgnaBn": 8.356,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/reports/2021-04/9167798ae48c9506b7355ca1c304770840d694ac/FS.pdf"
+    },
+    "2021Q2": {
+      "rndBn": 30.874,
+      "sgnaBn": 9.709,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/reports/2021-07/9569f2662ae0f3983455ad377b6c280825899d01/FS.pdf"
+    },
+    "2021Q3": {
+      "rndBn": 30.866,
+      "sgnaBn": 10.784,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/reports/2021-10/0cf16496cf67e79afa6a254c06bc78891f6bdb16/FS.pdf"
+    },
+    "2021Q4": {
+      "rndBn": 32.239,
+      "sgnaBn": 15.639,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/reports/2022-02/b59a98158c3db59117bf162d05d7778874715e4b/FS.pdf"
+    },
+    "2022Q1": {
+      "rndBn": 36.048,
+      "sgnaBn": 12.563,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/reports/2022-04/265da6cce43bffd70dff3d0069d0a70c8a966c4c/FS.pdf"
+    },
+    "2022Q2": {
+      "rndBn": 39.65,
+      "sgnaBn": 13.725,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/reports/2022-07/ce35ed1febcb5bcec8841bf8b041a27a32696da2/FS.pdf"
+    },
+    "2022Q3": {
+      "rndBn": 42.977,
+      "sgnaBn": 17.209,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/reports/2022-10/af5773d7f9f2c0c6ff95d60367c219ab7b718dec/FS.pdf"
+    },
+    "2022Q4": {
+      "rndBn": 44.587,
+      "sgnaBn": 19.949,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/reports/2023-02/8dd8b6bbd00c6c6fc6b6880790247c714597212c/FS.pdf"
+    },
+    "2023Q1": {
+      "rndBn": 39.157,
+      "sgnaBn": 16.152,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/reports/2023-04/acd503b6af80e0439baa9987cf144352b5dddbd2/FS.pdf"
+    },
+    "2023Q2": {
+      "rndBn": 41.665,
+      "sgnaBn": 16.53,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/reports/2023-07/9499f925a76bd9dcdb6d56457dffa0aeb970b2c7/FS.pdf"
+    },
+    "2023Q3": {
+      "rndBn": 51.138,
+      "sgnaBn": 17.571,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/reports/2023-10/668888b99c79add24048c3f09c4922824bbaead2/FS.pdf"
+    },
+    "2023Q4": {
+      "rndBn": 50.41,
+      "sgnaBn": 21.211,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/reports/2024-02/eb3eca87abc2668d3c8d5ca2eaa005b8f3f582b4/FS_audited.pdf"
+    },
+    "2024Q1": {
+      "rndBn": 46.109,
+      "sgnaBn": 19.248,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/reports/2024-04/94814966a7343a852f97d92cf37b751642ae51d8/FS.pdf"
+    },
+    "2024Q2": {
+      "rndBn": 48.058,
+      "sgnaBn": 22.238,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/reports/2024-07/17399162366195508ba6dadc3f0e29453ddc0a3e/FS.pdf"
+    },
+    "2024Q3": {
+      "rndBn": 52.783,
+      "sgnaBn": 26.295,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/reports/2024-10/bde3d1cb4c490f895059ce201f88e6b57bcc03b8/FS.pdf"
+    },
+    "2024Q4": {
+      "rndBn": 57.232,
+      "sgnaBn": 29.108,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/reports/2025-02/5619e02969294761af7084c9aa9b702f04ed9bee/FS_audited.pdf"
+    },
+    "2025Q1": {
+      "rndBn": 56.547,
+      "sgnaBn": 28.639,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/reports/2025-04/ae894c20458e4885df6919511660de815cc6cf71/FS.pdf"
+    },
+    "2025Q2": {
+      "rndBn": 61.28,
+      "sgnaBn": 23.228,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/reports/2025-07/a0b313164d9e5620b24929db32e6c6af7f3e6807/FS.pdf"
+    },
+    "2025Q3": {
+      "rndBn": 63.743,
+      "sgnaBn": 24.022,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/reports/2025-10/5db3e377172cf60a48e4a3a2d7fb46963789ec51/FS.pdf"
+    },
+    "2025Q4": {
+      "rndBn": 64.857,
+      "sgnaBn": 23.333,
+      "sourceUrl": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/reports/2026-02/cb73d5f4e019a8f6d7a494a0f8f6c6da2dfc4ee2/FS.pdf"
+    }
+  },
+  "amazon": {}
+}

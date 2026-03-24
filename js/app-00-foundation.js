@@ -29,7 +29,7 @@ const state = {
   },
 };
 
-const BUILD_ASSET_VERSION = "20260323-exact-growth-and-logo-trim-v119";
+const BUILD_ASSET_VERSION = "20260324-company-pool-v127";
 const CORPORATE_LOGO_AREA_MULTIPLIER = 1.728;
 const CORPORATE_LOGO_LINEAR_SCALE_MULTIPLIER = Math.sqrt(CORPORATE_LOGO_AREA_MULTIPLIER);
 const CORPORATE_LOGO_REVENUE_GAP_MULTIPLIER = 1.2;
@@ -333,7 +333,7 @@ const TEMPLATE_STYLE_PRESETS = {
 
 const STRUCTURAL_PROTOTYPES = {
   "default-replica": {
-    label: "Revenue bridge template",
+    label: "Universal revenue bridge",
     tokens: {},
     flags: {},
     defaults: {},
@@ -672,8 +672,6 @@ const refs = {};
 
 function queryRefs() {
   refs.heroCoverageText = document.querySelector("#heroCoverageText");
-  refs.companySelectionBlock = document.querySelector("#companySelectionBlock");
-  refs.companySelectionTitle = document.querySelector("#companySelectionTitle");
   refs.companyCountPill = document.querySelector("#companyCountPill");
   refs.companySearch = document.querySelector("#companySearch");
   refs.companyList = document.querySelector("#companyList");
@@ -1366,6 +1364,13 @@ const CHART_LABEL_TRANSLATIONS_ZH_EXACT = {
   "value added services": "增值服务",
   "value-added services and solutions": "增值服务与解决方案",
   "marketing services": "营销服务",
+  "marketplace and marketing revenues": "平台与营销收入",
+  "selling and marketing": "销售与营销",
+  "selling and marketing expenses": "销售与营销费用",
+  "research and development": "研发",
+  "research and development expenses": "研发费用",
+  "general and administrative": "一般及行政",
+  "general and administrative expenses": "一般及行政费用",
   "fintech and business services": "金融科技与企业服务",
   "domestic games": "本土游戏",
   "international games": "国际游戏",
@@ -1388,6 +1393,8 @@ const CHART_LABEL_TRANSLATIONS_ZH_EXACT = {
   "cloud business": "云业务",
   "digital media and entertainment": "数字媒体及娱乐",
   "innovation initiatives and others": "创新业务及其他",
+  "smart ev, ai and other new initiatives": "智能电动汽车、AI 及其他创新业务",
+  "smart ev and other new initiatives": "智能电动汽车及其他创新业务",
   "international commerce retail": "国际零售商业",
   "international commerce wholesale": "国际批发商业",
   "direct sales and others": "直销及其他",
@@ -1398,6 +1405,21 @@ const CHART_LABEL_TRANSLATIONS_ZH_EXACT = {
   "digital media and entertainment group": "大文娱集团",
   "walmart international": "沃尔玛国际",
   "walmart us": "沃尔玛美国",
+  "iot and lifestyle products": "物联网与生活消费产品",
+  "internet services": "互联网服务",
+  "other related businesses": "其他相关业务",
+  smartphones: "智能手机",
+  "smartphone x aiot": "手机 x AIoT",
+  "net product revenues": "净产品营收",
+  "net service revenues": "净服务营收",
+  "core local commerce": "核心本地商业",
+  "e-commerce": "电商业务",
+  "e-mail and others": "邮箱及其他",
+  youdao: "有道",
+  "cloud music": "云音乐",
+  "innovative businesses and others": "创新业务及其他",
+  "other pretax gain": "其他税前收益",
+  "other pretax expense": "其他税前损失",
 };
 
 const CHART_LABEL_TRANSLATIONS_ZH_PHRASES = {
@@ -1420,6 +1442,10 @@ const CHART_LABEL_TRANSLATIONS_ZH_PHRASES = {
   "global wealth & investment management": "全球财富与投资管理",
   "value-added services and solutions": "增值服务与解决方案",
   "sales & other operating revenue": "销售及其他营业收入",
+  "marketplace and marketing revenues": "平台与营销收入",
+  "selling and marketing": "销售与营销",
+  "research and development": "研发",
+  "general and administrative": "一般及行政",
   "service & retailing businesses": "服务与零售业务",
   "manufacturing businesses": "制造业务",
   "concentrate operations": "浓缩液业务",
@@ -1429,10 +1455,28 @@ const CHART_LABEL_TRANSLATIONS_ZH_PHRASES = {
   "major product line building materials": "主要产品线：建筑材料",
   "major product line dcor": "主要产品线：家居装饰",
   "major product line hardlines": "主要产品线：硬装及耐用品",
+  "internet services": "互联网服务",
+  "iot and lifestyle products": "物联网与生活消费产品",
+  "other related businesses": "其他相关业务",
+  smartphones: "智能手机",
+  "smartphone x aiot": "手机 x AIoT",
+  "net product revenues": "净产品营收",
+  "net service revenues": "净服务营收",
+  "core local commerce": "核心本地商业",
+  "e-commerce": "电商业务",
+  "e-mail and others": "邮箱及其他",
+  youdao: "有道",
+  "cloud music": "云音乐",
+  "innovative businesses and others": "创新业务及其他",
+  "pretax gain": "税前收益",
+  "pretax expense": "税前损失",
+  "new initiatives": "创新业务",
+  "smart ev": "智能电动汽车",
 };
 
 const CHART_LABEL_TRANSLATIONS_ZH_TOKENS = {
   asset: "资产",
+  and: "与",
   wealth: "财富",
   management: "管理",
   commercial: "商业",
@@ -1528,6 +1572,22 @@ const CHART_LABEL_TRANSLATIONS_ZH_TOKENS = {
   "women's": "女性",
   online: "在线",
   official: "官方口径",
+  research: "研发",
+  development: "开发",
+  selling: "销售",
+  marketing: "营销",
+  general: "一般",
+  administrative: "行政",
+  related: "相关",
+  lifestyle: "生活消费",
+  smart: "智能",
+  new: "新",
+  initiative: "业务",
+  initiatives: "业务",
+  pretax: "税前",
+  gain: "收益",
+  loss: "损失",
+  expense: "费用",
   store: "门店",
   stores: "门店",
   search: "搜索",
@@ -2329,6 +2389,15 @@ function inferredOfficialRevenueStyle(company, entry, rows = []) {
     [memberKeys.has("auto"), memberKeys.has("services"), memberKeys.has("energygenerationstorage")].filter(Boolean).length >= 2
   ) {
     return "tesla-revenue-bridge";
+  }
+  if (
+    company?.id === "xiaomi" &&
+    (memberKeys.has("smartphonexaiot") ||
+      memberKeys.has("smartevaiandothernewinitiatives") ||
+      memberKeys.has("smartphones") ||
+      memberKeys.has("internetservices"))
+  ) {
+    return "xiaomi-revenue-bridge";
   }
   if (
     company?.id === "visa" &&

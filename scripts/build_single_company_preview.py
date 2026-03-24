@@ -15,6 +15,8 @@ if str(SCRIPT_DIR) not in sys.path:
 
 import official_segments
 from company_payload_builder import build_arbitrary_company_payload
+from build_dataset import load_manual_presets
+from company_logo_resolver import ensure_logo_catalog_entry
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -111,12 +113,13 @@ def build_company_record(args: argparse.Namespace) -> dict[str, Any]:
 
 def build_company_payload(company: dict[str, Any], refresh: bool) -> dict[str, Any]:
     payload = build_arbitrary_company_payload(company, refresh=refresh)
-    payload["statementPresets"] = {}
+    manual_presets = load_manual_presets()
+    payload["statementPresets"] = manual_presets.get(str(company.get("id") or "").strip().lower()) or {}
     segment_quarter_count = sum(1 for item in payload.get("financials", {}).values() if item.get("officialRevenueSegments"))
     payload["coverage"] = {
         "quarterCount": len(payload.get("quarters", [])),
-        "pixelReplicaQuarterCount": 0,
-        "hasPixelReplica": False,
+        "pixelReplicaQuarterCount": len(payload["statementPresets"]),
+        "hasPixelReplica": bool(payload["statementPresets"]),
         "officialFinancialQuarterCount": len(payload.get("quarters", [])),
         "officialSegmentQuarterCount": segment_quarter_count,
     }
@@ -180,6 +183,12 @@ def main() -> int:
     args = parse_args()
     engine_root = PROJECT_ROOT
     company = build_company_record(args)
+    logo_entry = ensure_logo_catalog_entry(company, refresh=args.refresh)
+    if isinstance(logo_entry, dict):
+        if logo_entry.get("website") and not company.get("website"):
+            company["website"] = logo_entry.get("website")
+        if logo_entry.get("domain") and not company.get("domain"):
+            company["domain"] = logo_entry.get("domain")
     company_payload = build_company_payload(company, refresh=args.refresh)
     selected_quarter = validate_target_quarter(company_payload, str(args.quarter or "").strip())
     dataset_payload = build_dataset_payload(company_payload)

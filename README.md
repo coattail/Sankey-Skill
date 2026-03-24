@@ -14,18 +14,19 @@ Install dependencies:
 
 ```bash
 python3 -m pip install -r requirements.txt
+npm install
 ```
 
-Build a preview:
+Build local chart images:
 
 ```bash
-python3 scripts/build_single_company_preview.py --ticker ADBE --name-en "Adobe Inc." --quarter 2025Q4
+python3 scripts/build_single_company_images.py --ticker ADBE --name-en "Adobe Inc." --quarter 2025Q4
 ```
 
-Serve the generated preview:
+The command prints JSON with local output paths for:
 
-```bash
-python3 -m http.server 9036 --directory "tmp/adobe-inc-2025q4"
-```
+- the generated workspace
+- the Sankey PNG
+- the revenue segment bar-chart PNG
 
-Open [http://127.0.0.1:9036](http://127.0.0.1:9036).
+If you need to inspect the workspace manually, `scripts/build_single_company_preview.py` is still available for local preview/debug flows.

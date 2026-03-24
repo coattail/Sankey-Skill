@@ -1,0 +1,12 @@
+{
+  "name": "earnings-chart-generator-studio",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Standalone arbitrary-company earnings chart renderer and local image exporter.",
+  "scripts": {
+    "export-images": "node scripts/export_preview_images.js"
+  },
+  "dependencies": {
+    "puppeteer-core": "^24.7.1"
+  }
+}

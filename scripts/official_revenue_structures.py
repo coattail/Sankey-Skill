@@ -11,9 +11,10 @@ from html import unescape
 from pathlib import Path
 from typing import Any
 
+from ocr_utils import ensure_vision_ocr_binary, ocr_image_bytes, ocr_image_path
 from pypdf import PdfReader
 
-from official_financials import _extract_html_tables, _parse_number
+from official_financials import _extract_html_tables, _normalize_table_key, _parse_number
 from official_segments import (
     SegmentFact,
     _build_quarterly_series,
@@ -34,8 +35,6 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 CACHE_DIR = ROOT_DIR / "data" / "cache" / "official-revenue-structures"
 OFFICIAL_SEGMENT_CACHE_DIR = ROOT_DIR / "data" / "cache" / "official-segments"
 OFFICIAL_FINANCIAL_CACHE_DIR = ROOT_DIR / "data" / "cache" / "official-financials"
-VISION_OCR_SWIFT = ROOT_DIR / "scripts" / "vision_ocr.swift"
-VISION_OCR_BIN = CACHE_DIR / "vision-ocr"
 CACHE_VERSION = "20260323-v6"
 
 XBRL_AXIS_COMPANY_CONFIGS: dict[str, dict[str, Any]] = {
@@ -538,23 +537,12 @@ def _instance_name_for_filing(cik: int, accession_nodash: str, filing: dict[str,
 
 
 def _ensure_vision_ocr_binary() -> Path:
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    needs_build = not VISION_OCR_BIN.exists()
-    if not needs_build:
-        needs_build = VISION_OCR_BIN.stat().st_mtime < VISION_OCR_SWIFT.stat().st_mtime
-    if needs_build:
-        subprocess.run(["swiftc", str(VISION_OCR_SWIFT), "-o", str(VISION_OCR_BIN)], check=True)
-    return VISION_OCR_BIN
+    return ensure_vision_ocr_binary()
 
 
 def _ocr_image(url: str) -> str:
-    binary = _ensure_vision_ocr_binary()
-    with tempfile.TemporaryDirectory() as temp_dir:
-        extension = Path(url).suffix or ".jpg"
-        image_path = Path(temp_dir) / f"ocr-source{extension}"
-        image_path.write_bytes(_request(url))
-        result = subprocess.run([str(binary), str(image_path)], check=True, capture_output=True, text=True)
-    return result.stdout
+    extension = Path(url).suffix or ".jpg"
+    return ocr_image_bytes(_request(url), suffix=extension)
 
 
 def _normalize_member_key(label: str) -> str:
@@ -1947,6 +1935,180 @@ def _parse_netflix_records(html_text: str, filing_date: str, source_url: str, so
     return period_records
 
 
+def _jd_row_by_prefix(row_map: dict[str, list[str]], *candidates: str) -> list[str] | None:
+    normalized_candidates = [_normalize_table_key(candidate) for candidate in candidates if candidate]
+    for candidate in normalized_candidates:
+        for key, row in row_map.items():
+            if _normalize_table_key(key) == candidate:
+                return row
+    for candidate in normalized_candidates:
+        for key, row in row_map.items():
+            if _normalize_table_key(key).startswith(candidate):
+                return row
+    return None
+
+
+def _jd_pct_from_cells(cells: list[str]) -> float | None:
+    if not cells:
+        return None
+    return _parse_number(" ".join(str(cell) for cell in cells if str(cell).strip()))
+
+
+def _jd_primary_period_span(rows: list[list[str]]) -> int | None:
+    if not rows or not rows[0]:
+        return None
+    first_cell_key = _normalize_table_key(rows[0][0])
+    if first_cell_key.startswith("forthethreemonthsended"):
+        return 1
+    if first_cell_key.startswith("forthesixmonthsended"):
+        return 2
+    if first_cell_key.startswith("fortheninemonthsended"):
+        return 3
+    if first_cell_key.startswith("fortheyearended"):
+        return 4
+    return None
+
+
+def _jd_trim_primary_period_section(rows: list[list[str]]) -> list[list[str]]:
+    primary_rows: list[list[str]] = []
+    primary_span = _jd_primary_period_span(rows)
+    if primary_span is None:
+        return []
+    secondary_section_prefixes = ("forthethreemonthsended", "forthesixmonthsended", "fortheninemonthsended", "fortheyearended")
+    seen_primary_header = False
+    for row in rows:
+        if not row:
+            if seen_primary_header:
+                primary_rows.append(row)
+            continue
+        first_cell_key = _normalize_table_key(row[0])
+        if not seen_primary_header and _jd_primary_period_span([row]) == primary_span:
+            seen_primary_header = True
+            primary_rows.append(row)
+            continue
+        if seen_primary_header and first_cell_key.startswith(secondary_section_prefixes):
+            break
+        if seen_primary_header:
+            primary_rows.append(row)
+    return primary_rows
+
+
+def _jd_has_side_by_side_cumulative_block(rows: list[list[str]]) -> bool:
+    if not rows:
+        return False
+    companion_period_prefixes = ("forthesixmonthsended", "fortheninemonthsended", "fortheyearended")
+    header_cells = [_normalize_table_key(cell) for cell in rows[0][1:] if str(cell).strip()]
+    return any(cell.startswith(companion_period_prefixes) for cell in header_cells)
+
+
+def _jd_has_yoy_columns(rows: list[list[str]]) -> bool:
+    header_rows = rows[:3]
+    return any("yoy" in _normalize_table_key(cell) for row in header_rows for cell in row if str(cell).strip())
+
+
+def _jd_value_divisor_for_bn(rows: list[list[str]]) -> float:
+    header_text = " ".join(" ".join(row) for row in rows[:4]).lower()
+    if "in thousands" in header_text:
+        return 1_000_000.0
+    return 1_000.0
+
+
+def _jd_quarter_from_rows(rows: list[list[str]]) -> str | None:
+    if len(rows) < 2:
+        return None
+    date_row = rows[1]
+    if len(date_row) < 2:
+        return None
+    quarter = _calendar_quarter(_combine_date_label(date_row[1], date_row[1]) or "")
+    if quarter:
+        return quarter
+    month_label = str(date_row[1])
+    month_match = re.search(r"(March|June|September|December)\s+(\d{1,2}),\s*(20\d{2})", month_label, re.IGNORECASE)
+    if not month_match:
+        return None
+    month_to_quarter = {"march": 1, "june": 2, "september": 3, "december": 4}
+    return f"{month_match.group(3)}Q{month_to_quarter[month_match.group(1).lower()]}"
+
+
+def _parse_jd_records(html_text: str, filing_date: str, source_url: str, source_form: str) -> list[dict[str, Any]]:
+    period_records: list[dict[str, Any]] = []
+    row_meta = [
+        ("electronics-home-appliances", "Electronics and home appliances", "电子产品及家用电器", "Net product revenues", "商品收入", "electronicsandhomeappliancesrevenues", "electronicsandhomeappliancerevenues"),
+        ("general-merchandise", "General merchandise", "日用百货", "Net product revenues", "商品收入", "generalmerchandiserevenues"),
+        ("marketplace-marketing", "Marketplace and marketing", "平台及广告服务", "Net service revenues", "服务收入", "marketplaceandmarketingrevenues", "marketplaceandadvertisingrevenues"),
+        ("logistics-other-services", "Logistics and other services", "物流及其他服务", "Net service revenues", "服务收入", "logisticsandotherservicerevenues", "logisticsandotherservicerevenues"),
+    ]
+    for rows in _extract_html_tables(html_text):
+        if len(rows) < 8:
+            continue
+        if _jd_primary_period_span(rows) is None:
+            continue
+        primary_rows_source = _jd_trim_primary_period_section(rows)
+        if len(primary_rows_source) < 8:
+            continue
+        row_map = {_normalize_table_key(row[0]): row for row in primary_rows_source if row}
+        total_row = _jd_row_by_prefix(row_map, "totalnetrevenues")
+        if total_row is None:
+            continue
+        jd_rows = []
+        for item in row_meta:
+            member_key, name, name_zh, support_line, support_line_zh, *aliases = item
+            row = _jd_row_by_prefix(row_map, *aliases)
+            if row is None:
+                jd_rows = []
+                break
+            jd_rows.append((member_key, name, name_zh, support_line, support_line_zh, row))
+        if len(jd_rows) != len(row_meta):
+            continue
+        quarter = _jd_quarter_from_rows(primary_rows_source)
+        if not quarter:
+            continue
+        span = _jd_primary_period_span(primary_rows_source)
+        if span is None:
+            continue
+        has_side_by_side_cumulative_block = _jd_has_side_by_side_cumulative_block(primary_rows_source)
+        has_yoy_columns = span == 1 and _jd_has_yoy_columns(primary_rows_source) and not has_side_by_side_cumulative_block
+        value_divisor_for_bn = _jd_value_divisor_for_bn(primary_rows_source)
+        current_value_index = 2
+        quarter_rows = []
+        quarter_total_value = 0.0
+        for member_key, name, name_zh, support_line, support_line_zh, row in jd_rows:
+            if len(row) <= current_value_index:
+                quarter_rows = []
+                break
+            value = _parse_number(row[current_value_index])
+            if value is None:
+                quarter_rows = []
+                break
+            quarter_total_value += float(value)
+            yoy_pct = _jd_pct_from_cells(row[4:]) if has_yoy_columns and len(row) > 4 else None
+            quarter_rows.append(
+                {
+                    **_build_row(
+                    name,
+                    value / value_divisor_for_bn,
+                    member_key=member_key,
+                    source_url=source_url,
+                    source_form=source_form,
+                    filing_date=filing_date,
+                    support_lines=[support_line],
+                    yoy_pct=yoy_pct,
+                    ),
+                    "nameZh": name_zh,
+                    "supportLinesZh": [support_line_zh],
+                }
+            )
+        if not quarter_rows:
+            continue
+        total_value = _parse_number(total_row[current_value_index]) if len(total_row) > current_value_index else None
+        if total_value is None:
+            continue
+        if abs(float(total_value) - quarter_total_value) > max(1.0, abs(float(total_value)) * 0.01):
+            continue
+        period_records.append({"quarter": quarter, "span": span, "rows": quarter_rows, "displayRevenueBn": round(float(total_value) / value_divisor_for_bn, 3)})
+    return period_records
+
+
 def _latest_year_in_rows(rows: list[list[str]], limit: int = 4) -> str:
     years = re.findall(r"\b(20\d{2})\b", " ".join(" ".join(row) for row in rows[:limit]))
     return max(years) if years else ""
@@ -2352,7 +2514,7 @@ def _find_asml_pdf_mix_ocr(pdf_bytes: bytes) -> str | None:
                 image_path = Path(temp_dir) / f"asml-{page_index + 1}-{image_index}{suffix}"
                 image_path.write_bytes(image.data)
                 try:
-                    ocr_text = subprocess.run([str(_ensure_vision_ocr_binary()), str(image_path)], check=True, capture_output=True, text=True).stdout
+                    ocr_text = ocr_image_path(image_path)
                 except Exception:  # noqa: BLE001
                     continue
                 score = _score_asml_mix_ocr(ocr_text) + (4 if page_hint else 0)
@@ -2953,7 +3115,7 @@ def _table_parser_candidate_urls(
     form: str,
 ) -> list[str]:
     candidate_names = [primary_document]
-    if company_id == "netflix" and form == "8-K":
+    if company_id in {"jd-com", "netflix"} and form in {"6-K", "8-K"}:
         try:
             index_payload = _request_json(f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession_nodash}/index.json")
         except Exception:
@@ -2978,6 +3140,7 @@ def _table_parser_candidate_urls(
 def _parse_table_company_records(company: dict[str, Any], cik: int) -> dict[str, Any]:
     company_id = str(company.get("id") or "")
     parsers = {
+        "jd-com": _parse_jd_records,
         "oracle": _parse_oracle_records,
         "mastercard": _parse_mastercard_records,
         "netflix": _parse_netflix_records,
@@ -2993,7 +3156,11 @@ def _parse_table_company_records(company: dict[str, Any], cik: int) -> dict[str,
         accession = str(filing.get("accession") or "")
         filing_date = str(filing.get("filingDate") or "")
         primary_document = str(filing.get("primaryDocument") or "")
-        allowed_forms = {"10-Q", "10-K"} | ({"8-K"} if company_id == "netflix" else set())
+        allowed_forms = {"10-Q", "10-K"}
+        if company_id == "netflix":
+            allowed_forms |= {"8-K"}
+        if company_id == "jd-com":
+            allowed_forms = {"6-K"}
         if filing_date < "2019-01-01" or form not in allowed_forms or not accession or not primary_document:
             continue
         accession_nodash = str(accession).replace("-", "")
@@ -3031,6 +3198,7 @@ def _parse_table_company_records(company: dict[str, Any], cik: int) -> dict[str,
         except Exception as exc:  # noqa: BLE001
             result["errors"].append(f"{filing_date}: {exc}")
     style_by_company = {
+        "jd-com": "jd-revenue-category-bridge",
         "oracle": "oracle-revenue-bridge",
         "mastercard": "mastercard-revenue-bridge",
         "netflix": "netflix-regional-revenue",
@@ -3085,7 +3253,7 @@ def fetch_official_revenue_structure_history(company: dict[str, Any], refresh: b
                 result = _parse_alphabet_records(company, cik)
             elif company_id == "asml":
                 result = _parse_asml_records(company, cik)
-            elif company_id in {"oracle", "mastercard", "netflix"}:
+            elif company_id in {"jd-com", "oracle", "mastercard", "netflix"}:
                 result = _parse_table_company_records(company, cik)
             elif company_id in CUSTOM_XBRL_HIERARCHY_CONFIGS:
                 result = _parse_custom_xbrl_hierarchy_records(company, cik)

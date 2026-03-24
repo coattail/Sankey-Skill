@@ -61,8 +61,19 @@ Optional detailed breakdown fields:
 - `sgnaBn`
 - `rndBn`
 - `otherOpexBn`
+- `officialCostBreakdown`
+- `officialOpexBreakdown`
+- `costBreakdown`
+- `opexBreakdown`
+- `costBreakdownProfile`
 - `officialRevenueDetailGroups`
 - `officialRevenueStyle`
+- `fieldSources`
+- `extractionDiagnostics`
+
+Top-level optional debugging metadata:
+
+- `unifiedExtraction`
 
 ## Fallback workflow
 

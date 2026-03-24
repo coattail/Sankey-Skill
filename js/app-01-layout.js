@@ -721,6 +721,8 @@ function snapshotCanvasSize(snapshot) {
     Math.max(opexCount - 2, 0) * 44 +
     Math.max(deductionCount - 1, 0) * 58 +
     Math.max(costBreakdownCount - 1, 0) * 36 +
+    Math.max(costBreakdownCount - 2, 0) * 22 +
+    Math.max(costBreakdownCount - 4, 0) * 44 +
     positiveCount * 46;
   const densityExtra =
     (sourceCount + detailCount >= 8 ? 56 : 0) +
@@ -859,9 +861,15 @@ function snapshotCanvasSize(snapshot) {
   );
   const costBreakdownBand = prototypeBandConfig(templateTokens, "costBreakdown");
   const costBreakdownDensity = costBreakdownCount >= 3 ? "dense" : "regular";
+  const costBreakdownGapEstimate =
+    costBreakdownCount >= 5
+      ? 44
+      : costBreakdownCount >= 4
+        ? 38
+        : safeNumber(costBreakdownBand.gap, 24);
   const costBreakdownSpanRequired = estimatedStackSpan(
     costBreakdownItems.map((item) => Math.max(estimateReplicaTreeBoxHeight(item, { density: costBreakdownDensity }) + safeNumber(costBreakdownBand.heightOffset, 0), 24)),
-    safeNumber(costBreakdownBand.gap, 24)
+    costBreakdownGapEstimate
   );
   const costBreakdownSpanAvailable = Math.max(
     safeNumber(costBreakdownBand.maxY, 1002) - safeNumber(costBreakdownBand.minY, 744),
@@ -3082,4 +3090,3 @@ function renderBusinessLockup(lockupKey, x, y, options = {}) {
     </g>
   `;
 }
-

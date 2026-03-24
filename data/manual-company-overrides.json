@@ -1,0 +1,264 @@
+{
+  "byd": {
+    "ticker": "BYD",
+    "nameZh": "比亚迪",
+    "nameEn": "BYD Company Limited",
+    "slug": "byd",
+    "isAdr": false,
+    "brand": {
+      "primary": "#D7000F",
+      "secondary": "#111827",
+      "accent": "#FDE7EA"
+    },
+    "statementSource": "manual-cninfo-official",
+    "statementSourceUrl": "https://static.cninfo.com.cn/finalpage/2025-08-30/1224626653.PDF",
+    "reportingCurrency": "CNY",
+    "quarters": [
+      "2025Q2"
+    ],
+    "financials": {
+      "2025Q2": {
+        "calendarQuarter": "2025Q2",
+        "periodEnd": "2025-06-30",
+        "fiscalYear": "2025",
+        "fiscalQuarter": "Q2",
+        "fiscalLabel": "FY2025 Q2",
+        "statementCurrency": "CNY",
+        "revenueBn": 371.281,
+        "revenueYoyPct": 23.3,
+        "costOfRevenueBn": 304.415,
+        "grossProfitBn": 66.866,
+        "operatingExpensesBn": 48.146,
+        "operatingIncomeBn": 18.72,
+        "nonOperatingBn": 0.191,
+        "pretaxIncomeBn": 18.91,
+        "taxBn": 2.871,
+        "netIncomeBn": 16.039,
+        "netIncomeYoyPct": 13.648,
+        "grossMarginPct": 18.01,
+        "operatingMarginPct": 5.042,
+        "profitMarginPct": 4.32,
+        "effectiveTaxRatePct": 15.183,
+        "revenueQoqPct": null,
+        "grossMarginYoyDeltaPp": null,
+        "operatingMarginYoyDeltaPp": null,
+        "profitMarginYoyDeltaPp": null,
+        "displayCurrency": "CNY",
+        "displayScaleFactor": 1,
+        "statementSource": "manual-cninfo-official",
+        "statementSourceUrl": "https://static.cninfo.com.cn/finalpage/2025-08-30/1224626653.PDF",
+        "statementFilingDate": "2025-08-30",
+        "officialRevenueSegments": [
+          {
+            "name": "Transportation equipment & electrical manufacturing",
+            "nameZh": "交通运输设备及电气制造业",
+            "memberKey": "transportationelectricalmanufacturing",
+            "valueBn": 302.506,
+            "yoyPct": 32.49,
+            "qoqPct": null,
+            "mixPct": 81.48,
+            "mixYoyDeltaPp": 5.66,
+            "sourceUrl": "https://static.cninfo.com.cn/finalpage/2025-08-30/1224626653.PDF",
+            "sourceForm": "HalfYearReport",
+            "filingDate": "2025-08-30",
+            "supportLines": [
+              "Auto + related products"
+            ],
+            "supportLinesZh": [
+              "汽车及相关产品"
+            ],
+            "metricMode": "industry-revenue"
+          },
+          {
+            "name": "Daily electronic devices manufacturing",
+            "nameZh": "日用电子器件制造业",
+            "memberKey": "dailyelectronicdevicesmanufacturing",
+            "valueBn": 68.744,
+            "yoyPct": -5.54,
+            "qoqPct": null,
+            "mixPct": 18.51,
+            "mixYoyDeltaPp": -5.66,
+            "sourceUrl": "https://static.cninfo.com.cn/finalpage/2025-08-30/1224626653.PDF",
+            "sourceForm": "HalfYearReport",
+            "filingDate": "2025-08-30",
+            "supportLines": [
+              "Handset components + assembly"
+            ],
+            "supportLinesZh": [
+              "手机部件及组装"
+            ],
+            "metricMode": "industry-revenue"
+          },
+          {
+            "name": "Other",
+            "nameZh": "其他",
+            "memberKey": "other",
+            "valueBn": 0.031,
+            "yoyPct": -1.89,
+            "qoqPct": null,
+            "mixPct": 0.01,
+            "mixYoyDeltaPp": 0,
+            "sourceUrl": "https://static.cninfo.com.cn/finalpage/2025-08-30/1224626653.PDF",
+            "sourceForm": "HalfYearReport",
+            "filingDate": "2025-08-30",
+            "supportLines": [
+              "Other revenue"
+            ],
+            "supportLinesZh": [
+              "其他收入"
+            ],
+            "metricMode": "industry-revenue"
+          }
+        ],
+        "officialCostBreakdown": [
+          {
+            "name": "Transportation equipment & electrical manufacturing",
+            "nameZh": "交通运输设备及电气制造业",
+            "valueBn": 240.941,
+            "note": "20.35% gross margin",
+            "sourceUrl": "https://static.cninfo.com.cn/finalpage/2025-08-30/1224626653.PDF",
+            "valueFormat": "negative-parentheses"
+          },
+          {
+            "name": "Daily electronic devices manufacturing",
+            "nameZh": "日用电子器件制造业",
+            "valueBn": 63.448,
+            "note": "7.70% gross margin",
+            "sourceUrl": "https://static.cninfo.com.cn/finalpage/2025-08-30/1224626653.PDF",
+            "valueFormat": "negative-parentheses"
+          },
+          {
+            "name": "Other",
+            "nameZh": "其他",
+            "valueBn": 0.026,
+            "note": "Residual cost",
+            "sourceUrl": "https://static.cninfo.com.cn/finalpage/2025-08-30/1224626653.PDF",
+            "valueFormat": "negative-parentheses"
+          }
+        ],
+        "operatingProfitBreakdown": [
+          {
+            "name": "Taxes & surcharges",
+            "nameZh": "税金及附加",
+            "valueBn": 5.996,
+            "valueFormat": "negative-parentheses",
+            "sourceUrl": "https://static.cninfo.com.cn/finalpage/2025-08-30/1224626653.PDF"
+          },
+          {
+            "name": "Selling expense",
+            "nameZh": "销售费用",
+            "valueBn": 12.411,
+            "valueFormat": "negative-parentheses",
+            "sourceUrl": "https://static.cninfo.com.cn/finalpage/2025-08-30/1224626653.PDF"
+          },
+          {
+            "name": "Administrative expense",
+            "nameZh": "管理费用",
+            "valueBn": 10.386,
+            "valueFormat": "negative-parentheses",
+            "sourceUrl": "https://static.cninfo.com.cn/finalpage/2025-08-30/1224626653.PDF"
+          },
+          {
+            "name": "R&D expense",
+            "nameZh": "研发费用",
+            "valueBn": 29.596,
+            "valueFormat": "negative-parentheses",
+            "sourceUrl": "https://static.cninfo.com.cn/finalpage/2025-08-30/1224626653.PDF"
+          },
+          {
+            "name": "Finance income",
+            "nameZh": "财务收益",
+            "valueBn": 3.247,
+            "valueFormat": "positive-plus",
+            "sourceUrl": "https://static.cninfo.com.cn/finalpage/2025-08-30/1224626653.PDF"
+          },
+          {
+            "name": "Other income",
+            "nameZh": "其他收益",
+            "valueBn": 6.622,
+            "valueFormat": "positive-plus",
+            "sourceUrl": "https://static.cninfo.com.cn/finalpage/2025-08-30/1224626653.PDF"
+          },
+          {
+            "name": "Investment income",
+            "nameZh": "投资收益",
+            "valueBn": 1.376,
+            "valueFormat": "positive-plus",
+            "sourceUrl": "https://static.cninfo.com.cn/finalpage/2025-08-30/1224626653.PDF"
+          },
+          {
+            "name": "Fair value gain",
+            "nameZh": "公允价值变动收益",
+            "valueBn": 0.373,
+            "valueFormat": "positive-plus",
+            "sourceUrl": "https://static.cninfo.com.cn/finalpage/2025-08-30/1224626653.PDF"
+          },
+          {
+            "name": "Credit impairment",
+            "nameZh": "信用减值损失",
+            "valueBn": 0.103,
+            "valueFormat": "negative-parentheses",
+            "sourceUrl": "https://static.cninfo.com.cn/finalpage/2025-08-30/1224626653.PDF"
+          },
+          {
+            "name": "Asset impairment",
+            "nameZh": "资产减值损失",
+            "valueBn": 1.254,
+            "valueFormat": "negative-parentheses",
+            "sourceUrl": "https://static.cninfo.com.cn/finalpage/2025-08-30/1224626653.PDF"
+          },
+          {
+            "name": "Asset disposal loss",
+            "nameZh": "资产处置损失",
+            "valueBn": 0.018,
+            "valueFormat": "negative-parentheses",
+            "sourceUrl": "https://static.cninfo.com.cn/finalpage/2025-08-30/1224626653.PDF"
+          }
+        ]
+      }
+    },
+    "officialRevenueStructureHistory": {
+      "source": "manual-cninfo-official",
+      "quarters": {
+        "2025Q2": {
+          "segments": [
+            {
+              "name": "Transportation equipment & electrical manufacturing",
+              "nameZh": "交通运输设备及电气制造业",
+              "memberKey": "transportationelectricalmanufacturing",
+              "valueBn": 302.506,
+              "filingDate": "2025-08-30",
+              "sourceUrl": "https://static.cninfo.com.cn/finalpage/2025-08-30/1224626653.PDF"
+            },
+            {
+              "name": "Daily electronic devices manufacturing",
+              "nameZh": "日用电子器件制造业",
+              "memberKey": "dailyelectronicdevicesmanufacturing",
+              "valueBn": 68.744,
+              "filingDate": "2025-08-30",
+              "sourceUrl": "https://static.cninfo.com.cn/finalpage/2025-08-30/1224626653.PDF"
+            },
+            {
+              "name": "Other",
+              "nameZh": "其他",
+              "memberKey": "other",
+              "valueBn": 0.031,
+              "filingDate": "2025-08-30",
+              "sourceUrl": "https://static.cninfo.com.cn/finalpage/2025-08-30/1224626653.PDF"
+            }
+          ]
+        }
+      },
+      "filingsUsed": [
+        {
+          "title": "BYD 2025 Half-Year Report",
+          "quarter": "2025Q2",
+          "filingDate": "2025-08-30",
+          "pdf": "https://static.cninfo.com.cn/finalpage/2025-08-30/1224626653.PDF"
+        }
+      ],
+      "errors": []
+    },
+    "errors": []
+  }
+}

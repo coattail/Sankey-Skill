@@ -17,6 +17,7 @@ from official_financials import fetch_official_financial_history
 from official_segments import fetch_official_segment_history
 from official_revenue_structures import fetch_official_revenue_structure_history
 from stockanalysis_financials import fetch_stockanalysis_financial_history
+from company_logo_resolver import ensure_logo_catalog_entry
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -763,6 +764,63 @@ def supplement_tencent_official_financials(company_payload: dict[str, Any]) -> d
     return company_payload
 
 
+def supplement_stockanalysis_with_official_financials(company_payload: dict[str, Any], refresh: bool = False) -> dict[str, Any]:
+    if str(company_payload.get("statementSource") or "") != "stockanalysis-financials":
+        return company_payload
+
+    company = {
+        "id": company_payload.get("id"),
+        "ticker": company_payload.get("ticker"),
+        "nameZh": company_payload.get("nameZh"),
+        "nameEn": company_payload.get("nameEn"),
+        "slug": company_payload.get("slug"),
+        "rank": company_payload.get("rank"),
+        "isAdr": company_payload.get("isAdr"),
+        "brand": company_payload.get("brand"),
+    }
+    official_payload = fetch_official_financial_history(company, refresh=refresh)
+    official_financials = official_payload.get("financials") or {}
+    if not isinstance(official_financials, dict) or not official_financials:
+        return company_payload
+
+    financials: dict[str, Any] = company_payload.setdefault("financials", {})
+    for quarter_key, official_entry in official_financials.items():
+        if not isinstance(official_entry, dict):
+            continue
+        existing_entry = financials.get(quarter_key)
+        if not isinstance(existing_entry, dict):
+            financials[quarter_key] = dict(official_entry)
+            continue
+        preserved_fields = {
+            "officialRevenueSegments": existing_entry.get("officialRevenueSegments"),
+            "officialRevenueDetailGroups": existing_entry.get("officialRevenueDetailGroups"),
+            "officialRevenueStyle": existing_entry.get("officialRevenueStyle"),
+            "displayCurrency": existing_entry.get("displayCurrency"),
+            "displayScaleFactor": existing_entry.get("displayScaleFactor"),
+            "qualityFlags": existing_entry.get("qualityFlags"),
+        }
+        merged_entry = dict(existing_entry)
+        merged_entry.update(official_entry)
+        for field_name, field_value in preserved_fields.items():
+            if field_value is not None:
+                merged_entry[field_name] = field_value
+        financials[quarter_key] = merged_entry
+
+    company_payload["quarters"] = sorted(financials.keys(), key=parse_period)
+    company_payload["statementSource"] = "stockanalysis-financials+official-fallback"
+    source_url_candidates = [
+        str(company_payload.get("statementSourceUrl") or "").strip(),
+        str(official_payload.get("statementSourceUrl") or "").strip(),
+    ]
+    company_payload["statementSourceUrl"] = " | ".join([item for item in source_url_candidates if item])
+    merged_errors = list(company_payload.get("errors") or [])
+    for error in official_payload.get("errors") or []:
+        if error not in merged_errors:
+            merged_errors.append(error)
+    company_payload["errors"] = merged_errors
+    return company_payload
+
+
 def sanitize_implausible_q4_revenue_aligned_statements(company_payload: dict[str, Any]) -> dict[str, Any]:
     financials: dict[str, Any] = company_payload.get("financials", {})
     bridge_fields = (
@@ -1051,10 +1109,12 @@ def main() -> int:
     for company in selected_companies:
         print(f"[build] {company['ticker']} ...", flush=True)
         try:
+            ensure_logo_catalog_entry(company, refresh=args.refresh)
             payload = fetch_company_payload(company, refresh=args.refresh)
             if company.get("financialSource") != "stockanalysis":
                 payload = merge_official_segment_history(payload, company, refresh=args.refresh)
             payload = merge_official_revenue_structure_history(payload, company, refresh=args.refresh)
+            payload = supplement_stockanalysis_with_official_financials(payload, refresh=args.refresh)
             payload = supplement_tencent_official_financials(payload)
             payload = sanitize_implausible_q4_revenue_aligned_statements(payload)
             payload = apply_usd_display_fields(payload, fx_cache)
@@ -1088,10 +1148,12 @@ def main() -> int:
                 continue
             print(f"[build] {company['ticker']} ...", flush=True)
             try:
+                ensure_logo_catalog_entry(company, refresh=False)
                 payload = fetch_company_payload(company, refresh=False)
                 if company.get("financialSource") != "stockanalysis":
                     payload = merge_official_segment_history(payload, company, refresh=False)
                 payload = merge_official_revenue_structure_history(payload, company, refresh=False)
+                payload = supplement_stockanalysis_with_official_financials(payload, refresh=args.refresh)
                 payload = supplement_tencent_official_financials(payload)
                 payload = sanitize_implausible_q4_revenue_aligned_statements(payload)
                 payload = apply_usd_display_fields(payload, fx_cache)

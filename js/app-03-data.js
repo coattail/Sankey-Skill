@@ -98,7 +98,52 @@ function renderableQuarterKeys(company) {
     if (presetKeys.has(quarterKey)) return true;
     return isRenderableBridgeEntry(company.financials?.[quarterKey]);
   });
-  return validQuarterKeys.length ? validQuarterKeys : quarterKeys;
+  const baseQuarterKeys = validQuarterKeys.length ? validQuarterKeys : quarterKeys;
+  const filteredQuarterKeys = filterQuarterKeysByClassificationPolicy(company, baseQuarterKeys);
+  return filteredQuarterKeys.length ? filteredQuarterKeys : baseQuarterKeys;
+}
+
+function reportingCycleForQuarterKey(quarterKey) {
+  const parsed = parseQuarterKey(quarterKey);
+  if (!parsed) return null;
+  if (parsed.quarter === 2) return "half-year";
+  if (parsed.quarter === 4) return "annual";
+  return "quarterly";
+}
+
+function quarterHasOfficialRevenueClassification(company, quarterKey) {
+  const entry = company?.financials?.[quarterKey];
+  if (Array.isArray(entry?.officialRevenueSegments) && entry.officialRevenueSegments.some((item) => safeNumber(item?.valueBn) > 0.02)) {
+    return true;
+  }
+  const structurePayload = company?.officialRevenueStructureHistory?.quarters?.[quarterKey];
+  return Array.isArray(structurePayload?.segments) && structurePayload.segments.some((item) => safeNumber(item?.valueBn) > 0.02);
+}
+
+function quarterHasOfficialExpenseClassification(company, quarterKey) {
+  const entry = company?.financials?.[quarterKey];
+  return (
+    (Array.isArray(entry?.officialOpexBreakdown) && entry.officialOpexBreakdown.some((item) => safeNumber(item?.valueBn) > 0.02)) ||
+    (Array.isArray(entry?.opexBreakdown) && entry.opexBreakdown.some((item) => safeNumber(item?.valueBn) > 0.02))
+  );
+}
+
+function filterQuarterKeysByClassificationPolicy(company, quarterKeys = []) {
+  const policy = company?.classificationPolicy;
+  if (!policy || !policy.displayOfficiallyClassifiedPeriodsOnly) return quarterKeys;
+  const allowedCycles = Array.isArray(policy.displayPeriodTypes) && policy.displayPeriodTypes.length
+    ? new Set(policy.displayPeriodTypes.map((item) => String(item || "").trim().toLowerCase()).filter(Boolean))
+    : null;
+  const requireRevenue = policy.requireDisplayRevenueClassification !== false;
+  const requireExpense = !!policy.requireDisplayExpenseClassification;
+  const filteredKeys = quarterKeys.filter((quarterKey) => {
+    const cycle = reportingCycleForQuarterKey(quarterKey);
+    if (allowedCycles && (!cycle || !allowedCycles.has(cycle))) return false;
+    if (requireRevenue && !quarterHasOfficialRevenueClassification(company, quarterKey)) return false;
+    if (requireExpense && !quarterHasOfficialExpenseClassification(company, quarterKey)) return false;
+    return true;
+  });
+  return filteredKeys.length ? filteredKeys : quarterKeys;
 }
 
 function preferredQuarter(company, preferReplica) {
@@ -142,7 +187,7 @@ function syncQuarterOptions({ preferReplica } = { preferReplica: false }) {
 }
 
 function summarizeCoverage(company, snapshot) {
-  return "当前季度使用结构模板生成";
+  return "当前季度使用结构原型生成";
 }
 
 function resolveNormalizedOperatingStage(entry, grossProfitBn, costOfRevenueBn, operatingProfitBnBase) {
@@ -155,6 +200,13 @@ function resolveNormalizedOperatingStage(entry, grossProfitBn, costOfRevenueBn, 
     .map((value) => (value !== null && value !== undefined ? Math.max(safeNumber(value), 0) : null))
     .filter((value) => value !== null)
     .reduce((sum, value) => sum + value, 0);
+  const explicitOpexBreakdownSumBn = (
+    Array.isArray(entry?.officialOpexBreakdown)
+      ? entry.officialOpexBreakdown
+      : Array.isArray(entry?.opexBreakdown)
+        ? entry.opexBreakdown
+        : []
+  ).reduce((sum, item) => sum + Math.max(safeNumber(item?.valueBn), 0), 0);
   const hasGrossStage =
     revenueBn !== null &&
     grossProfitBn !== null &&
@@ -183,6 +235,11 @@ function resolveNormalizedOperatingStage(entry, grossProfitBn, costOfRevenueBn, 
     totalCostsAdjustedOperatingExpensesBn <= safeNumber(grossProfitBn) + Math.max(0.35, safeNumber(grossProfitBn) * 0.04);
   const shouldNormalizeFromTotalCosts =
     totalCostsProxyLikely &&
+    !(
+      explicitOpexBreakdownSumBn > 0.05 &&
+      sourceOperatingExpensesBn !== null &&
+      Math.abs(explicitOpexBreakdownSumBn - sourceOperatingExpensesBn) <= Math.max(0.35, explicitOpexBreakdownSumBn * 0.05)
+    ) &&
     (
       sourceOperatingProfitBn === null ||
       sourceLooksDerivedFromGrossBridge ||
@@ -215,6 +272,13 @@ function resolveNormalizedOperatingExpenses(entry, grossProfitBn, operatingProfi
   const sourceOperatingExpensesBn =
     entry?.operatingExpensesBn !== null && entry?.operatingExpensesBn !== undefined ? Math.max(safeNumber(entry.operatingExpensesBn), 0) : null;
   const revenueBn = entry?.revenueBn !== null && entry?.revenueBn !== undefined ? Math.max(safeNumber(entry.revenueBn), 0) : null;
+  const explicitOpexBreakdownSumBn = (
+    Array.isArray(entry?.officialOpexBreakdown)
+      ? entry.officialOpexBreakdown
+      : Array.isArray(entry?.opexBreakdown)
+        ? entry.opexBreakdown
+        : []
+  ).reduce((sum, item) => sum + Math.max(safeNumber(item?.valueBn), 0), 0);
   const reconciledOperatingExpensesBn =
     grossProfitBn !== null && grossProfitBn !== undefined && operatingProfitBn !== null && operatingProfitBn !== undefined
       ? Math.max(safeNumber(grossProfitBn) - safeNumber(operatingProfitBn), 0)
@@ -258,7 +322,16 @@ function resolveNormalizedOperatingExpenses(entry, grossProfitBn, operatingProfi
   const relativeDelta = reconciledOperatingExpensesBn > 0.05 ? delta / reconciledOperatingExpensesBn : delta;
   const exceedsGrossProfit =
     grossProfitBn !== null && grossProfitBn !== undefined && sourceOperatingExpensesBn > safeNumber(grossProfitBn) + 0.25;
-  const sourceReliable = !exceedsGrossProfit && (delta <= 0.25 || relativeDelta <= 0.08);
+  const explicitBreakdownMatchesSource =
+    explicitOpexBreakdownSumBn > 0.05 &&
+    Math.abs(explicitOpexBreakdownSumBn - sourceOperatingExpensesBn) <= Math.max(0.35, explicitOpexBreakdownSumBn * 0.05);
+  const sourceReliable =
+    !exceedsGrossProfit &&
+    (
+      delta <= 0.25 ||
+      relativeDelta <= 0.08 ||
+      (explicitBreakdownMatchesSource && relativeDelta <= 0.12)
+    );
   return {
     value: sourceReliable ? sourceOperatingExpensesBn : reconciledOperatingExpensesBn,
     sourceReliable,
@@ -488,6 +561,7 @@ const REVENUE_STYLE_PALETTES = {
   "mastercard-revenue-bridge": UNIVERSAL_REVENUE_SEGMENT_PALETTE,
   "netflix-regional-revenue": UNIVERSAL_REVENUE_SEGMENT_PALETTE,
   "tsmc-platform-mix": UNIVERSAL_REVENUE_SEGMENT_PALETTE,
+  "xiaomi-revenue-bridge": UNIVERSAL_REVENUE_SEGMENT_PALETTE,
 };
 
 const ORACLE_SUPPORT_LINES = {
@@ -1417,7 +1491,12 @@ function buildGenericSnapshot(company, entry, quarterKey) {
       ? "当前桥图主干来自 Stock Analysis 财务表后备数据源，适用于验证非 SEC 公司扩展接入能力。"
       : usesFinancialFallback
         ? "当前桥图主干采用官方优先的数据流程；若官方主干字段不完整，会安全回退到标准化财务表数据，而不是凭空推断错误桥段。"
-      : "模板底稿基于公开季度财务主干字段生成；若部分利润层级未直接披露，会按财报主干关系自动补齐桥图节点。";
+        : "模板底稿基于公开季度财务主干字段生成；若部分利润层级未直接披露，会按财报主干关系自动补齐桥图节点。";
+  const operatingLossOverflowBn = operatingProfitBn < -0.02 ? Math.abs(operatingProfitBn) : 0;
+  const resolvedFinancialFootnote =
+    operatingLossOverflowBn > 0
+      ? `${financialFootnote} 当前季度营业费用高于毛利，桥图会将超出毛利的 ${formatBillions(operatingLossOverflowBn)} 视作营业亏损溢出，并保留真实营业利润标签。`
+      : financialFootnote;
   const positiveAdjustments = [];
   const belowOperatingItems = [];
   if (inferredNonOperatingBn) {
@@ -1472,7 +1551,7 @@ function buildGenericSnapshot(company, entry, quarterKey) {
     mode: "template-base",
     modeLabel: "高精复刻版",
     sourceLabel: financialSourceLabel,
-    coverageLabel: "结构模板 + 高精模板",
+    coverageLabel: "结构原型 + 高精模板",
     title: `${company.nameEn} ${compactFiscalLabel(entry.fiscalLabel) || entry.fiscalLabel || quarterKey} Income Statement`,
     subtitle: financialSubtitle,
     quarterSummary: compactFiscalLabel(entry.fiscalLabel) || quarterKey,
@@ -1516,7 +1595,7 @@ function buildGenericSnapshot(company, entry, quarterKey) {
     opexBreakdown: resolveOperatingExpenseBreakdown(null, company, normalizedEntry),
     positiveAdjustments,
     belowOperatingItems,
-    footnote: financialFootnote,
+    footnote: resolvedFinancialFootnote,
   };
 }
 
@@ -1549,7 +1628,7 @@ function buildReplicaTemplateSnapshot(company, entry, quarterKey) {
     mode: "replica-template",
     modeLabel: "高精复刻版",
     sourceLabel: officialBusinessGroups ? "Official filings segment data" : fallbackSourceLabel,
-    coverageLabel: "结构模板 + 高精模板",
+    coverageLabel: "结构原型 + 高精模板",
     subtitle: officialBusinessGroups
       ? "Replica-style layout auto-generated from quarterly statement data and official filing segment disclosures."
       : fallbackSubtitle,
@@ -1572,7 +1651,7 @@ function mergeOfficialRevenueStructureIntoSnapshot(snapshot, company, entry) {
     displayCurrency: entry.displayCurrency || snapshot.displayCurrency,
     displayScaleFactor: entry.displayScaleFactor || snapshot.displayScaleFactor || 1,
     sourceLabel: "Official filings segment data",
-    coverageLabel: "结构模板 + 高精模板",
+    coverageLabel: "结构原型 + 高精模板",
   };
 }
 
@@ -1588,8 +1667,8 @@ function buildSnapshot(company, quarterKey) {
             ...preset,
             mode: "pixel-replica",
             modeLabel: "高精复刻版",
-            sourceLabel: "Calibrated template + quarterly statement",
-            coverageLabel: "结构模板 + 高精模板",
+            sourceLabel: "Calibrated prototype + quarterly statement",
+            coverageLabel: "结构原型 + 高精模板",
             companyName: company.nameEn,
             companyDisplayName: companyDisplay(company),
             ticker: company.ticker,
@@ -2189,45 +2268,260 @@ function pushPaletteColorWithContrast(palette, color, minHueDistance = 16, minLu
   }
 }
 
+function contrastRatioBetweenColors(leftColor, rightColor) {
+  const leftLum = relativeLuminance(leftColor);
+  const rightLum = relativeLuminance(rightColor);
+  const lighter = Math.max(leftLum, rightLum);
+  const darker = Math.min(leftLum, rightLum);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function barPaletteSeparationMetrics(candidateColor, existingColors = []) {
+  const normalizedCandidate = normalizeBarPaletteColor(candidateColor);
+  const candidateHsl = colorToHsl(normalizedCandidate);
+  if (!normalizedCandidate || !candidateHsl) {
+    return {
+      score: Number.NEGATIVE_INFINITY,
+      isAcceptable: false,
+      minHueDistance: 0,
+      minSaturationDistance: 0,
+      minLightnessDistance: 0,
+      minContrastRatio: 0,
+    };
+  }
+  if (!existingColors.length) {
+    return {
+      score: 1000,
+      isAcceptable: true,
+      minHueDistance: 360,
+      minSaturationDistance: 1,
+      minLightnessDistance: 1,
+      minContrastRatio: 21,
+    };
+  }
+  let minHueDistance = Number.POSITIVE_INFINITY;
+  let minSaturationDistance = Number.POSITIVE_INFINITY;
+  let minLightnessDistance = Number.POSITIVE_INFINITY;
+  let minContrastRatio = Number.POSITIVE_INFINITY;
+  let hasHardConflict = false;
+  existingColors.forEach((existingColor) => {
+    const normalizedExisting = normalizeBarPaletteColor(existingColor);
+    const existingHsl = colorToHsl(normalizedExisting);
+    if (!normalizedExisting || !existingHsl) return;
+    minHueDistance = Math.min(minHueDistance, hueDistanceDegrees(candidateHsl.h, existingHsl.h));
+    minSaturationDistance = Math.min(minSaturationDistance, Math.abs(candidateHsl.s - existingHsl.s));
+    minLightnessDistance = Math.min(minLightnessDistance, Math.abs(candidateHsl.l - existingHsl.l));
+    minContrastRatio = Math.min(minContrastRatio, contrastRatioBetweenColors(normalizedCandidate, normalizedExisting));
+    if (
+      barColorsAreTooSimilar(normalizedCandidate, normalizedExisting, {
+        minHueDistance: 30,
+        minSatDistance: 0.2,
+        minLightnessDistance: 0.18,
+      })
+    ) {
+      hasHardConflict = true;
+    }
+  });
+  const isAcceptable =
+    !hasHardConflict &&
+    minContrastRatio >= 1.12 &&
+    (
+      minHueDistance >= 30 ||
+      minLightnessDistance >= 0.2 ||
+      minSaturationDistance >= 0.22
+    );
+  return {
+    score:
+      minHueDistance * 1.9 +
+      minSaturationDistance * 80 +
+      minLightnessDistance * 135 +
+      minContrastRatio * 24 +
+      (isAcceptable ? 120 : -260),
+    isAcceptable,
+    minHueDistance,
+    minSaturationDistance,
+    minLightnessDistance,
+    minContrastRatio,
+  };
+}
+
+function derivedBarPaletteCandidatesFromColor(baseColor, options = {}) {
+  const normalized = normalizeBarPaletteColor(baseColor);
+  const baseHsl = colorToHsl(normalized);
+  if (!normalized || !baseHsl) return [];
+  const hueOffsets = Array.isArray(options.hueOffsets) && options.hueOffsets.length
+    ? options.hueOffsets
+    : [0, 28, -28, 52, -52, 138, -138, 180];
+  const minSaturation = clamp(safeNumber(options.minSaturation, 0.52), 0.16, 0.9);
+  const saturationTargets = Array.isArray(options.saturationTargets) && options.saturationTargets.length
+    ? options.saturationTargets.map((value) => clamp(safeNumber(value), 0, 1))
+    : [
+        clamp(Math.max(baseHsl.s, minSaturation), minSaturation, 0.88),
+        clamp(Math.max(baseHsl.s + 0.12, minSaturation), minSaturation, 0.92),
+      ];
+  const lightnessTargets = Array.isArray(options.lightnessTargets) && options.lightnessTargets.length
+    ? options.lightnessTargets.map((value) => clamp(safeNumber(value), 0, 1))
+    : [
+        clamp(baseHsl.l, 0.34, 0.6),
+        clamp(baseHsl.l + 0.15, 0.42, 0.72),
+        clamp(baseHsl.l - 0.15, 0.24, 0.52),
+      ];
+  const candidates = [];
+  hueOffsets.forEach((offset, offsetIndex) => {
+    const useLightnessIndexes =
+      offsetIndex === 0
+        ? [0, 1, 2]
+        : Math.abs(offset) >= 120
+          ? [0, 1]
+          : [0];
+    useLightnessIndexes.forEach((lightnessIndex) => {
+      saturationTargets.forEach((saturation, saturationIndex) => {
+        if (lightnessIndex > 0 && saturationIndex > 0) return;
+        candidates.push(hslToHex(baseHsl.h + offset, saturation, lightnessTargets[lightnessIndex]));
+      });
+    });
+  });
+  candidates.push(mixHex(normalized, "#FFFFFF", 0.1));
+  candidates.push(mixHex(normalized, "#111827", 0.18));
+  return uniqueBarPalette(candidates);
+}
+
+function buildDistinctBrandPalette(candidateColors = [], minCount = 8, anchorColors = []) {
+  const palette = [];
+  const anchors = uniqueBarPalette(anchorColors);
+  anchors.forEach((anchor) => {
+    const metrics = barPaletteSeparationMetrics(anchor, palette);
+    if (!palette.length || metrics.isAcceptable) {
+      palette.push(anchor);
+    }
+  });
+  const uniqueCandidates = uniqueBarPalette(candidateColors);
+  while (palette.length < minCount) {
+    let bestCandidate = null;
+    let bestScore = Number.NEGATIVE_INFINITY;
+    uniqueCandidates.forEach((candidate, index) => {
+      if (!candidate || palette.includes(candidate)) return;
+      const metrics = barPaletteSeparationMetrics(candidate, palette);
+      const preferenceBonus = Math.max(0, 26 - index * 0.45);
+      const score = metrics.score + preferenceBonus;
+      if (score > bestScore) {
+        bestCandidate = candidate;
+        bestScore = score;
+      }
+    });
+    if (!bestCandidate) break;
+    palette.push(bestCandidate);
+  }
+  return palette;
+}
+
 function companyBrandBarPalette(companyId, minCount = 8) {
   const companyKey = String(companyId || "").trim().toLowerCase();
   const overridePalette = BAR_COMPANY_PALETTE_OVERRIDES[companyKey];
-  if (Array.isArray(overridePalette) && overridePalette.length) {
-    const mergedOverride = uniqueBarPalette([...overridePalette, ...BAR_SEGMENT_COLOR_POOL]);
-    while (mergedOverride.length < minCount) {
-      const idx = mergedOverride.length % BAR_SEGMENT_COLOR_POOL.length;
-      pushPaletteColorWithContrast(mergedOverride, BAR_SEGMENT_COLOR_POOL[idx], 10, 0.03);
-    }
-    return mergedOverride;
-  }
-
   const company = getCompany(companyId) || null;
-  const primary = normalizeBarPaletteColor(company?.brand?.primary || "#1CA1E2") || "#1CA1E2";
-  const secondary = normalizeBarPaletteColor(company?.brand?.secondary || mixHex(primary, "#F6B800", 0.38)) || "#F6B800";
-  const accentBase = normalizeBarPaletteColor(company?.brand?.accent || mixHex(primary, "#FFFFFF", 0.55)) || "#7D7D80";
+  const brand = resolvedCompanyBrand(company);
+  const primary = normalizeBarPaletteColor(brand?.primary || "#1CA1E2") || "#1CA1E2";
+  let secondary = normalizeBarPaletteColor(brand?.secondary || mixHex(primary, "#F6B800", 0.38)) || "#F6B800";
+  let accentBase = normalizeBarPaletteColor(brand?.accent || mixHex(primary, "#FFFFFF", 0.55)) || "#7D7D80";
+  if (
+    barColorsAreTooSimilar(secondary, primary, {
+      minHueDistance: 28,
+      minSatDistance: 0.2,
+      minLightnessDistance: 0.18,
+    })
+  ) {
+    secondary = rotateColorHue(primary, 150);
+  }
+  if (
+    relativeLuminance(accentBase) > 0.8 ||
+    barColorsAreTooSimilar(accentBase, primary, {
+      minHueDistance: 26,
+      minSatDistance: 0.18,
+      minLightnessDistance: 0.16,
+    }) ||
+    barColorsAreTooSimilar(accentBase, secondary, {
+      minHueDistance: 26,
+      minSatDistance: 0.18,
+      minLightnessDistance: 0.16,
+    })
+  ) {
+    accentBase = rotateColorHue(primary, -145);
+  }
   const accent = relativeLuminance(accentBase) > 0.72 ? mixHex(accentBase, "#374151", 0.34) : accentBase;
   const seed = hashStringDeterministic(String(companyId || "global"));
   const complementary = rotateColorHue(primary, 180);
-  const splitA = rotateColorHue(primary, 145);
-  const splitB = rotateColorHue(primary, -145);
-  const warmCompanion = mixHex(complementary, "#F59E0B", 0.55);
-  const coolCompanion = mixHex(primary, "#14B8A6", 0.5);
-  const neutralCompanion = mixHex(secondary, "#94A3B8", 0.35);
-  const punchCompanion = mixHex(primary, "#EF4444", 0.36);
-  const bridgeCompanion = mixHex(primary, secondary, 0.52);
+  const splitA = rotateColorHue(primary, 140);
+  const splitB = rotateColorHue(primary, -140);
+  const bridgeCompanion = mixHex(primary, secondary, 0.5);
+  const warmCompanion = mixHex(complementary, "#F59E0B", 0.48);
+  const coolCompanion = mixHex(primary, "#14B8A6", 0.44);
+  const accentBridge = mixHex(accent, primary, 0.42);
   const rotatingPool = BAR_SEGMENT_COLOR_POOL.map((_, index) => BAR_SEGMENT_COLOR_POOL[(seed + index * 3) % BAR_SEGMENT_COLOR_POOL.length]);
-  const palette = [];
-  [primary, secondary, accent, complementary, splitA, splitB, warmCompanion, coolCompanion, neutralCompanion, punchCompanion, bridgeCompanion, ...rotatingPool].forEach(
-    (color) => pushPaletteColorWithContrast(palette, color, 18, 0.06)
-  );
-  while (palette.length < minCount) {
-    const idx = palette.length % BAR_SEGMENT_COLOR_POOL.length;
-    pushPaletteColorWithContrast(palette, BAR_SEGMENT_COLOR_POOL[idx], 10, 0.03);
-    if (palette.length < minCount) {
-      pushPaletteColorWithContrast(palette, mixHex(BAR_SEGMENT_COLOR_POOL[idx], "#FFFFFF", 0.12), 10, 0.03);
-    }
+
+  if (Array.isArray(overridePalette) && overridePalette.length) {
+    return buildDistinctBrandPalette(
+      [
+        ...overridePalette,
+        ...derivedBarPaletteCandidatesFromColor(primary, { hueOffsets: [0, 28, -28, 145, -145, 180] }),
+        ...derivedBarPaletteCandidatesFromColor(secondary, { hueOffsets: [0, 24, -24, 180], minSaturation: 0.34 }),
+        ...derivedBarPaletteCandidatesFromColor(accent, { hueOffsets: [0, 38, -38, 180], minSaturation: 0.4 }),
+        ...rotatingPool,
+      ],
+      minCount,
+      [...overridePalette, primary, secondary, accent]
+    );
   }
-  return palette;
+
+  const candidatePool = [
+    primary,
+    secondary,
+    accent,
+    complementary,
+    splitA,
+    splitB,
+    bridgeCompanion,
+    warmCompanion,
+    coolCompanion,
+    accentBridge,
+    ...derivedBarPaletteCandidatesFromColor(primary, { hueOffsets: [0, 24, -24, 48, -48, 140, -140, 180] }),
+    ...derivedBarPaletteCandidatesFromColor(secondary, { hueOffsets: [0, 22, -22, 160, -160, 180], minSaturation: 0.3 }),
+    ...derivedBarPaletteCandidatesFromColor(accent, { hueOffsets: [0, 34, -34, 180], minSaturation: 0.38 }),
+    ...derivedBarPaletteCandidatesFromColor(bridgeCompanion, { hueOffsets: [0, 30, -30, 180], minSaturation: 0.44 }),
+    ...rotatingPool,
+  ];
+  return buildDistinctBrandPalette(candidatePool, minCount, [primary, secondary, accent]);
+}
+
+function pickBestBarPaletteColor(brandPalette = [], usedColors = [], preferredIndexes = []) {
+  const palette = Array.isArray(brandPalette) ? brandPalette.filter(Boolean) : [];
+  if (!palette.length) return null;
+  const orderedIndexes = [];
+  const seenIndexes = new Set();
+  (preferredIndexes || []).forEach((index) => {
+    const normalizedIndex = ((Math.trunc(safeNumber(index, 0)) % palette.length) + palette.length) % palette.length;
+    if (seenIndexes.has(normalizedIndex)) return;
+    seenIndexes.add(normalizedIndex);
+    orderedIndexes.push(normalizedIndex);
+  });
+  for (let index = 0; index < palette.length; index += 1) {
+    if (seenIndexes.has(index)) continue;
+    seenIndexes.add(index);
+    orderedIndexes.push(index);
+  }
+  let bestCandidate = null;
+  let bestScore = Number.NEGATIVE_INFINITY;
+  orderedIndexes.forEach((index, order) => {
+    const candidate = palette[index];
+    if (!candidate || usedColors.includes(candidate)) return;
+    const metrics = barPaletteSeparationMetrics(candidate, usedColors);
+    const slotBonus = Math.max(0, 24 - order * 2.5);
+    const score = metrics.score + slotBonus;
+    if (score > bestScore) {
+      bestCandidate = candidate;
+      bestScore = score;
+    }
+  });
+  return bestCandidate;
 }
 
 function stableBarColorMap(companyId, segmentKeys = []) {
@@ -2237,26 +2531,20 @@ function stableBarColorMap(companyId, segmentKeys = []) {
   const orderedKeys = [...new Set(segmentKeys.filter(Boolean))];
   const brandPalette = companyBrandBarPalette(normalizedCompanyId, Math.max(orderedKeys.length + 2, 8));
   const companySlotOverrides = BAR_SEGMENT_COLOR_SLOT_OVERRIDES_BY_COMPANY[normalizedCompanyId] || null;
-  const canUseCandidateColor = (candidateColor) =>
-    !!candidateColor &&
-    !usedColors.includes(candidateColor) &&
-    !usedColors.some((existingColor) => barColorsAreTooSimilar(candidateColor, existingColor));
   orderedKeys.forEach((segmentKey) => {
     const preferredSlot = companySlotOverrides?.[segmentKey] ?? BAR_SEGMENT_COLOR_SLOT_OVERRIDES[segmentKey];
     if (preferredSlot === null || preferredSlot === undefined) return;
-    const candidate = brandPalette[preferredSlot % brandPalette.length];
-    if (!canUseCandidateColor(candidate)) return;
+    const candidate = pickBestBarPaletteColor(brandPalette, usedColors, [preferredSlot]);
+    if (!candidate) return;
     colorMap[segmentKey] = candidate;
     usedColors.push(candidate);
   });
   const primaryKey = orderedKeys[0];
   if (primaryKey && !colorMap[primaryKey]) {
-    for (let index = 0; index < brandPalette.length; index += 1) {
-      const candidate = brandPalette[index];
-      if (!canUseCandidateColor(candidate)) continue;
-      colorMap[primaryKey] = candidate;
-      usedColors.push(candidate);
-      break;
+    const preferredCandidate = pickBestBarPaletteColor(brandPalette, usedColors, [0, 1, 2]);
+    if (preferredCandidate) {
+      colorMap[primaryKey] = preferredCandidate;
+      usedColors.push(preferredCandidate);
     }
     if (!colorMap[primaryKey]) {
       for (let index = 0; index < brandPalette.length; index += 1) {
@@ -2275,13 +2563,12 @@ function stableBarColorMap(companyId, segmentKeys = []) {
   orderedKeys.forEach((segmentKey) => {
     if (colorMap[segmentKey]) return;
     const seed = hashStringDeterministic(`${normalizedCompanyId || "global"}:${segmentKey}`);
-    for (let offset = 0; offset < brandPalette.length; offset += 1) {
-      const color = brandPalette[(seed + offset) % brandPalette.length];
-      if (canUseCandidateColor(color)) {
-        colorMap[segmentKey] = color;
-        usedColors.push(color);
-        return;
-      }
+    const preferredIndexes = Array.from({ length: brandPalette.length }, (_, offset) => (seed + offset * 3) % brandPalette.length);
+    const bestCandidate = pickBestBarPaletteColor(brandPalette, usedColors, preferredIndexes);
+    if (bestCandidate) {
+      colorMap[segmentKey] = bestCandidate;
+      usedColors.push(bestCandidate);
+      return;
     }
     for (let offset = 0; offset < brandPalette.length; offset += 1) {
       const color = brandPalette[(seed + offset) % brandPalette.length];
@@ -2594,6 +2881,7 @@ function expandBarDetailRows(company, entry, baseRows = []) {
   const detailRows = sanitizeOfficialStructureRows(entry, entry?.officialRevenueDetailGroups || [])
     .filter((item) => safeNumber(item?.valueBn) > 0.02);
   if (detailRows.length < 2 || !baseRows.length) return baseRows;
+  const bridgeStyle = resolvedBarBridgeStyle(company, entry, null, baseRows);
   const totalBaseValue = baseRows.reduce((sum, item) => sum + safeNumber(item?.valueBn), 0);
   const detailRowsByTarget = new Map();
   detailRows.forEach((item) => {
@@ -2635,6 +2923,9 @@ function expandBarDetailRows(company, entry, baseRows = []) {
     const projectedRowCount = nextRows.length - 1 + cleanedRows.length;
     const targetShare = targetValueBn / Math.max(totalBaseValue, 0.001);
     const priorityTargetKeys = new Set(["products", "product", "adrevenue"]);
+    if (bridgeStyle === "xiaomi-revenue-bridge") {
+      priorityTargetKeys.add("smartphonexaiot");
+    }
     const targetIsAggregateLike = isAggregateLikeSegmentLabel(targetRow?.name || "");
     const shouldExpand =
       projectedRowCount <= 7 &&
@@ -3117,9 +3408,12 @@ function buildRevenueSegmentBarHistory(company, anchorQuarterKey, maxQuarters = 
       : {};
   const financialQuarterKeys = Array.isArray(company?.quarters) ? company.quarters : [];
   const structureQuarterKeys = Object.keys(structureQuarterMap || {});
-  const quarterKeys = [...new Set([...financialQuarterKeys, ...structureQuarterKeys])]
+  const quarterKeys = filterQuarterKeysByClassificationPolicy(
+    company,
+    [...new Set([...financialQuarterKeys, ...structureQuarterKeys])]
     .filter((quarterKey) => /^\d{4}Q[1-4]$/.test(quarterKey))
-    .sort((left, right) => quarterSortValue(left) - quarterSortValue(right));
+    .sort((left, right) => quarterSortValue(left) - quarterSortValue(right))
+  );
   if (!quarterKeys.length) return null;
   const allValidQuarterKeys = quarterKeys.filter((quarterKey) => {
     const entry = company?.financials?.[quarterKey];
@@ -3164,6 +3458,15 @@ function buildRevenueSegmentBarHistory(company, anchorQuarterKey, maxQuarters = 
   const anchorBoundKeys = allValidQuarterKeys.filter((quarterKey) => quarterSortValue(quarterKey) <= anchorSort);
   const selectedQuarterKeys = (anchorBoundKeys.length ? anchorBoundKeys : allValidQuarterKeys).slice(-windowSize);
   if (!selectedQuarterKeys.length) return null;
+  const displayPeriodTypes = Array.isArray(company?.classificationPolicy?.displayPeriodTypes)
+    ? company.classificationPolicy.displayPeriodTypes.map((item) => String(item || "").trim().toLowerCase()).filter(Boolean)
+    : [];
+  const usesNonQuarterDisplayWindow =
+    !!company?.classificationPolicy?.displayOfficiallyClassifiedPeriodsOnly &&
+    displayPeriodTypes.some((item) => item === "half-year" || item === "annual");
+  const requestedWindowCount = usesNonQuarterDisplayWindow ? selectedQuarterKeys.length : windowSize;
+  const windowUnitLabel = usesNonQuarterDisplayWindow ? "periods" : "quarters";
+  const windowUnitLabelZh = usesNonQuarterDisplayWindow ? "个披露期" : "个季度";
 
   let quarters = selectedQuarterKeys.map((quarterKey) => {
     const entry = company.financials?.[quarterKey] || null;
@@ -4085,34 +4388,84 @@ function buildRevenueSegmentBarHistory(company, anchorQuarterKey, maxQuarters = 
     stackOrder: segmentStats.slice().sort((left, right) => left.totalValueBn - right.totalValueBn).map((item) => item.key),
     maxRevenueBn: Math.max(...quarters.map((item) => safeNumber(item.totalRevenueBn)), 1),
     anchorQuarterKey: selectedQuarterKeys[selectedQuarterKeys.length - 1] || null,
-    requestedQuarterCount: windowSize,
+    requestedQuarterCount: requestedWindowCount,
     availableQuarterCount,
     missingQuarterCount,
     reportedSegmentQuarterCount,
     imputedQuarterCount,
     smoothedQuarterCount,
     convertedQuarterCount,
+    windowUnitLabel,
+    windowUnitLabelZh,
     displayCurrencySet,
     sourceCurrencySet,
     primaryDisplayCurrency,
   };
 }
 
-function formatBarSegmentValue(valueBn) {
-  const numeric = safeNumber(valueBn);
-  if (numeric >= 10) return `${Math.round(numeric)}`;
-  if (numeric >= 1) return `${Math.round(numeric)}`;
-  return numeric.toFixed(1);
+function barChartUnitSpec(history) {
+  const currency = String(history?.primaryDisplayCurrency || "USD").toUpperCase();
+  const maxRevenueBn = safeNumber(history?.maxRevenueBn, 0);
+  const unitValueBn = maxRevenueBn > 0 && maxRevenueBn < 3 ? 0.1 : 1;
+  const displayValue = (valueBn) => safeNumber(valueBn) / unitValueBn;
+
+  if (currentChartLanguage() === "en") {
+    if (currency === "MIXED") {
+      return {
+        currency,
+        unitValueBn,
+        displayValue,
+        line1: "Mixed",
+        line2: "currencies",
+      };
+    }
+    return {
+      currency,
+      unitValueBn,
+      displayValue,
+      line1: currency === "USD" ? "In $" : `In ${currency}`,
+      line2: unitValueBn >= 1 ? "billion" : "100 million",
+    };
+  }
+  if (currency === "MIXED") {
+    return {
+      currency,
+      unitValueBn,
+      displayValue,
+      line1: "单位",
+      line2: "混合币种",
+    };
+  }
+  if (currency === "USD") {
+    return {
+      currency,
+      unitValueBn,
+      displayValue,
+      line1: "单位",
+      line2: unitValueBn >= 1 ? "十亿美元" : "亿美元",
+    };
+  }
+  return {
+    currency,
+    unitValueBn,
+    displayValue,
+    line1: "单位",
+    line2: unitValueBn >= 1 ? `${currency} 十亿` : `${currency} 亿`,
+  };
+}
+
+function formatBarSegmentValue(valueBn, history) {
+  const unitSpec = barChartUnitSpec(history);
+  const numeric = unitSpec.displayValue(valueBn);
+  if (numeric >= 100) return `${Math.round(numeric)}`;
+  if (Math.abs(numeric - Math.round(numeric)) < 0.05) return `${Math.round(numeric)}`;
+  return numeric.toFixed(numeric >= 10 ? 0 : 1).replace(/\.0$/, "");
 }
 
 function barAxisUnitLines(history) {
-  const currency = String(history?.primaryDisplayCurrency || "USD").toUpperCase();
-  if (currentChartLanguage() === "en") {
-    if (currency === "USD") return { line1: "In $", line2: "billion" };
-    if (currency === "MIXED") return { line1: "Mixed", line2: "currencies" };
-    return { line1: `In ${currency}`, line2: "billion" };
-  }
-  if (currency === "USD") return { line1: "单位", line2: "十亿美元" };
-  if (currency === "MIXED") return { line1: "单位", line2: "混合币种" };
-  return { line1: "单位", line2: `${currency} 十亿` };
+  const unitSpec = barChartUnitSpec(history);
+  return {
+    line1: unitSpec.line1,
+    line2: unitSpec.line2,
+  };
 }

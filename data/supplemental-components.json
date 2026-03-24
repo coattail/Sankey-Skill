@@ -6,6 +6,15 @@
           "Products",
           "Services"
         ],
+        "aggregateSegments": {
+          "Products": {
+            "exclude": [
+              "Services"
+            ],
+            "memberKey": "products",
+            "nameZh": "产品"
+          }
+        },
         "fixedGrossMarginPctBySegment": {
           "Services": 75
         },

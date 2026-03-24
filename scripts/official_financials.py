@@ -96,6 +96,142 @@ FINANCIAL_CONCEPTS: dict[str, list[str]] = {
     ],
 }
 
+OPTIONAL_BREAKDOWN_RULES: tuple[dict[str, Any], ...] = (
+    {
+        "id": "costProducts",
+        "kind": "cost",
+        "name": "Products",
+        "nameZh": "产品",
+        "exact": (
+            "CostOfGoodsSold",
+            "CostOfProductRevenue",
+            "CostOfProductSales",
+            "CostOfProductsSold",
+        ),
+        "patterns": (
+            re.compile(r"costof(products?|goods)(sold|sales|revenue)?", re.IGNORECASE),
+            re.compile(r"product(s)?(revenue)?cost", re.IGNORECASE),
+        ),
+    },
+    {
+        "id": "costServices",
+        "kind": "cost",
+        "name": "Services",
+        "nameZh": "服务",
+        "exact": (
+            "CostOfServiceRevenue",
+            "CostOfServiceSales",
+            "CostOfServices",
+            "CostOfServicesSold",
+        ),
+        "patterns": (
+            re.compile(r"costofservice(s)?(sold|sales|revenue)?", re.IGNORECASE),
+            re.compile(r"service(s)?(revenue)?cost", re.IGNORECASE),
+        ),
+    },
+    {
+        "id": "trafficAcquisitionCost",
+        "kind": "cost",
+        "name": "TAC",
+        "nameZh": "流量获取成本",
+        "exact": ("TrafficAcquisitionCosts",),
+        "patterns": (
+            re.compile(r"traffic.*acquisition.*cost", re.IGNORECASE),
+            re.compile(r"\btac\b", re.IGNORECASE),
+        ),
+    },
+    {
+        "id": "fulfillment",
+        "kind": "opex",
+        "name": "Fulfillment",
+        "nameZh": "履约",
+        "exact": ("FulfillmentExpense",),
+        "patterns": (re.compile(r"fulfillment.*expense", re.IGNORECASE),),
+    },
+    {
+        "id": "technologyAndContent",
+        "kind": "opex",
+        "name": "Technology & Content",
+        "nameZh": "技术与内容",
+        "exact": (),
+        "patterns": (
+            re.compile(r"technology.*content.*expense", re.IGNORECASE),
+            re.compile(r"content.*technology.*expense", re.IGNORECASE),
+        ),
+    },
+    {
+        "id": "salesAndMarketing",
+        "kind": "opex",
+        "name": "Sales & Marketing",
+        "nameZh": "销售与营销",
+        "exact": (
+            "SalesAndMarketingExpense",
+            "SellingAndMarketingExpense",
+        ),
+        "patterns": (
+            re.compile(r"salesandmarketingexpense", re.IGNORECASE),
+            re.compile(r"sellingandmarketingexpense", re.IGNORECASE),
+        ),
+    },
+    {
+        "id": "marketingAdvertising",
+        "kind": "opex",
+        "name": "Marketing",
+        "nameZh": "营销",
+        "exact": (
+            "AdvertisingExpense",
+            "MarketingAndAdvertisingExpense",
+            "MarketingExpense",
+        ),
+        "patterns": (
+            re.compile(r"marketing.*advertising.*expense", re.IGNORECASE),
+            re.compile(r"advertising.*expense", re.IGNORECASE),
+            re.compile(r"marketing.*expense", re.IGNORECASE),
+        ),
+    },
+    {
+        "id": "generalAndAdministrative",
+        "kind": "opex",
+        "name": "G&A",
+        "nameZh": "管理费用",
+        "exact": (
+            "GeneralAndAdministrativeExpense",
+            "GeneralAndAdministrativeExpenseOtherThanAmortizationOfAcquiredIntangibleAssets",
+        ),
+        "patterns": (
+            re.compile(r"generalandadministrativeexpense", re.IGNORECASE),
+            re.compile(r"administrative.*expense", re.IGNORECASE),
+        ),
+    },
+    {
+        "id": "rnd",
+        "kind": "opex",
+        "name": "R&D",
+        "nameZh": "研发",
+        "exact": ("ResearchAndDevelopmentExpense",),
+        "patterns": (
+            re.compile(r"researchanddevelopmentexpense", re.IGNORECASE),
+            re.compile(r"research.*development.*expense", re.IGNORECASE),
+        ),
+    },
+    {
+        "id": "restructuring",
+        "kind": "opex",
+        "name": "Restructuring",
+        "nameZh": "重组费用",
+        "exact": (),
+        "patterns": (re.compile(r"restructuring.*(charge|expense|cost)", re.IGNORECASE),),
+    },
+    {
+        "id": "impairment",
+        "kind": "opex",
+        "name": "Impairment",
+        "nameZh": "减值",
+        "exact": (),
+        "patterns": (re.compile(r"impairment.*(charge|expense|loss)", re.IGNORECASE),),
+    },
+)
+
 
 @dataclass
 class StatementFact:
@@ -186,6 +322,61 @@ def _parse_fact(
         unit=unit,
         frame=str(raw.get("frame") or ""),
     )
+
+
+def _parse_optional_breakdown_fact(
+    namespace: str,
+    concept: str,
+    concept_priority: int,
+    unit: str,
+    raw: dict[str, Any],
+) -> StatementFact | None:
+    form = str(raw.get("form") or "")
+    if form not in ALLOWED_FORMS:
+        return None
+    filed = str(raw.get("filed") or "")
+    if filed and filed < MIN_FILING_DATE:
+        return None
+    start_date = str(raw.get("start") or "")
+    end_date = str(raw.get("end") or "")
+    if not start_date or not end_date:
+        return None
+    value = raw.get("val")
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or math.isnan(float(value)):
+        return None
+    namespace_priority = NAMESPACE_PRIORITY.get(namespace, 6)
+    return StatementFact(
+        namespace=namespace,
+        concept=concept,
+        concept_priority=concept_priority,
+        namespace_priority=namespace_priority,
+        accession=str(raw.get("accn") or ""),
+        filed=filed,
+        form=form,
+        fiscal_year=str(raw.get("fy") or ""),
+        fiscal_period=str(raw.get("fp") or ""),
+        start_date=start_date,
+        end_date=end_date,
+        value=float(value),
+        unit=unit,
+        frame=str(raw.get("frame") or ""),
+    )
+
+
+def _match_optional_breakdown_rule(concept: str) -> tuple[dict[str, Any], int] | None:
+    concept_name = str(concept or "").strip()
+    if not concept_name:
+        return None
+    normalized = concept_name.lower()
+    for rule in OPTIONAL_BREAKDOWN_RULES:
+        exact = tuple(rule.get("exact") or ())
+        if concept_name in exact:
+            return (rule, 120 - len(exact))
+    for rule in OPTIONAL_BREAKDOWN_RULES:
+        for pattern in tuple(rule.get("patterns") or ()):
+            if pattern.search(normalized):
+                return (rule, 72)
+    return None
 
 
 def _fact_rank(fact: StatementFact) -> tuple[int, int, int, int, str, str]:
@@ -448,6 +639,194 @@ def _collect_field_series(companyfacts: dict[str, Any], reporting_currency: str)
     return field_series
 
 
+def _collect_optional_breakdown_series(companyfacts: dict[str, Any], reporting_currency: str) -> dict[str, dict[str, StatementFact]]:
+    facts_payload = companyfacts.get("facts", {})
+    categorized_facts: dict[str, list[StatementFact]] = {}
+    for namespace, namespace_facts in facts_payload.items():
+        if not isinstance(namespace_facts, dict):
+            continue
+        for concept, concept_payload in namespace_facts.items():
+            if not isinstance(concept_payload, dict):
+                continue
+            matched = _match_optional_breakdown_rule(str(concept))
+            if matched is None:
+                continue
+            rule, concept_priority = matched
+            units = concept_payload.get("units", {})
+            items = units.get(reporting_currency, [])
+            if not isinstance(items, list):
+                continue
+            for raw in items:
+                if not isinstance(raw, dict):
+                    continue
+                fact = _parse_optional_breakdown_fact(namespace, str(concept), concept_priority, reporting_currency, raw)
+                if fact is None:
+                    continue
+                categorized_facts.setdefault(str(rule["id"]), []).append(fact)
+    return {
+        category_id: _build_field_series(facts)
+        for category_id, facts in categorized_facts.items()
+        if facts
+    }
+
+
+def _make_breakdown_item(
+    name: str,
+    name_zh: str,
+    value: float,
+    *,
+    value_format: str,
+    source_url: str | None,
+    fact: StatementFact | None = None,
+) -> dict[str, Any]:
+    item = {
+        "name": name,
+        "nameZh": name_zh,
+        "valueBn": _money_to_bn(value),
+        "valueFormat": value_format,
+        "sourceUrl": source_url,
+    }
+    if fact is not None:
+        item["sourceForm"] = fact.form
+        item["filingDate"] = fact.filed
+    return item
+
+
+def _build_official_cost_breakdown(
+    *,
+    total_cost_value: float | None,
+    products_fact: StatementFact | None = None,
+    services_fact: StatementFact | None = None,
+    tac_fact: StatementFact | None = None,
+    source_url: str | None = None,
+) -> list[dict[str, Any]]:
+    total_cost = float(total_cost_value) if total_cost_value is not None else None
+    items: list[dict[str, Any]] = []
+    disclosed_total = 0.0
+    if products_fact is not None and products_fact.value > 0:
+        items.append(
+            _make_breakdown_item(
+                "Products",
+                "产品",
+                products_fact.value,
+                value_format="negative-parentheses",
+                source_url=source_url,
+                fact=products_fact,
+            )
+        )
+        disclosed_total += products_fact.value
+    if services_fact is not None and services_fact.value > 0:
+        items.append(
+            _make_breakdown_item(
+                "Services",
+                "服务",
+                services_fact.value,
+                value_format="negative-parentheses",
+                source_url=source_url,
+                fact=services_fact,
+            )
+        )
+        disclosed_total += services_fact.value
+    if tac_fact is not None and tac_fact.value > 0:
+        items.append(
+            _make_breakdown_item(
+                "TAC",
+                "流量获取成本",
+                tac_fact.value,
+                value_format="negative-parentheses",
+                source_url=source_url,
+                fact=tac_fact,
+            )
+        )
+        disclosed_total += tac_fact.value
+    if total_cost is not None and total_cost > 0 and disclosed_total > 0:
+        residual = total_cost - disclosed_total
+        if residual > max(25_000_000, total_cost * 0.01):
+            items.append(
+                _make_breakdown_item(
+                    "Other cost",
+                    "其他成本",
+                    residual,
+                    value_format="negative-parentheses",
+                    source_url=source_url,
+                )
+            )
+    if total_cost is not None and len(items) <= 1:
+        lone_total = sum(float(item.get("valueBn") or 0) for item in items)
+        total_cost_bn = _money_to_bn(total_cost) or 0
+        if abs(lone_total - total_cost_bn) <= max(0.08, total_cost_bn * 0.01):
+            return []
+    return [item for item in items if item.get("valueBn") not in (None, 0)]
+
+
+def _build_official_opex_breakdown(
+    *,
+    operating_expenses_value: float | None,
+    sgna_fact: StatementFact | None = None,
+    sales_marketing_fact: StatementFact | None = None,
+    marketing_fact: StatementFact | None = None,
+    general_admin_fact: StatementFact | None = None,
+    rnd_fact: StatementFact | None = None,
+    fulfillment_fact: StatementFact | None = None,
+    technology_content_fact: StatementFact | None = None,
+    restructuring_fact: StatementFact | None = None,
+    impairment_fact: StatementFact | None = None,
+    source_url: str | None = None,
+) -> list[dict[str, Any]]:
+    total_opex = float(operating_expenses_value) if operating_expenses_value is not None else None
+    items: list[dict[str, Any]] = []
+    disclosed_total = 0.0
+
+    ordered_items: list[tuple[str, str, StatementFact | None]] = []
+    if fulfillment_fact is not None and fulfillment_fact.value > 0:
+        ordered_items.append(("Fulfillment", "履约", fulfillment_fact))
+    if technology_content_fact is not None and technology_content_fact.value > 0:
+        ordered_items.append(("Technology & Content", "技术与内容", technology_content_fact))
+    if sales_marketing_fact is not None and sales_marketing_fact.value > 0:
+        ordered_items.append(("Sales & Marketing", "销售与营销", sales_marketing_fact))
+    elif marketing_fact is not None and marketing_fact.value > 0:
+        ordered_items.append(("Marketing", "营销", marketing_fact))
+    if general_admin_fact is not None and general_admin_fact.value > 0:
+        ordered_items.append(("G&A", "管理费用", general_admin_fact))
+    elif sgna_fact is not None and sgna_fact.value > 0:
+        ordered_items.append(("SG&A", "销售及管理费用", sgna_fact))
+    if rnd_fact is not None and rnd_fact.value > 0:
+        ordered_items.append(("R&D", "研发", rnd_fact))
+    if restructuring_fact is not None and restructuring_fact.value > 0:
+        ordered_items.append(("Restructuring", "重组费用", restructuring_fact))
+    if impairment_fact is not None and impairment_fact.value > 0:
+        ordered_items.append(("Impairment", "减值", impairment_fact))
+
+    for name, name_zh, fact in ordered_items:
+        if fact is None:
+            continue
+        items.append(
+            _make_breakdown_item(
+                name,
+                name_zh,
+                fact.value,
+                value_format="negative-parentheses",
+                source_url=source_url,
+                fact=fact,
+            )
+        )
+        disclosed_total += fact.value
+
+    if total_opex is not None and total_opex > 0 and disclosed_total > 0:
+        residual = total_opex - disclosed_total
+        if residual > max(25_000_000, total_opex * 0.01):
+            items.append(
+                _make_breakdown_item(
+                    "Other OpEx",
+                    "其他营业费用",
+                    residual,
+                    value_format="negative-parentheses",
+                    source_url=source_url,
+                )
+            )
+    return [item for item in items if item.get("valueBn") not in (None, 0)]
+
+
 def _pick_field_fact(
     concept_series: dict[str, dict[str, StatementFact]],
     field: str,
@@ -561,7 +940,7 @@ def _quarter_from_date_label(date_label: str, year_label: str) -> tuple[int, int
 
 
 def _normalize_table_key(text: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "", str(text or "").lower())
+    return re.sub(r"[^0-9a-z\u4e00-\u9fff]+", "", str(text or "").lower())
 
 
 def _parse_number(text: str | None) -> float | None:
@@ -812,6 +1191,28 @@ def _parse_asml_release(html_text: str, filing_date: str, source_url: str, curre
                 )
                 entry["statementSourceUrl"] = source_url
                 entry["statementFilingDate"] = filing_date
+                opex_items: list[dict[str, Any]] = []
+                if sgna_value is not None and sgna_value > 0:
+                    opex_items.append(
+                        _make_breakdown_item(
+                            "SG&A",
+                            "销售及管理费用",
+                            sgna_value * scale,
+                            value_format="negative-parentheses",
+                            source_url=source_url,
+                        )
+                    )
+                if rnd_value is not None and rnd_value > 0:
+                    opex_items.append(
+                        _make_breakdown_item(
+                            "R&D",
+                            "研发",
+                            rnd_value * scale,
+                            value_format="negative-parentheses",
+                            source_url=source_url,
+                        )
+                    )
+                entry["officialOpexBreakdown"] = opex_items
                 return (quarter, entry)
 
         header = rows[0]
@@ -853,6 +1254,157 @@ def _parse_asml_release(html_text: str, filing_date: str, source_url: str, curre
         )
         entry["statementSourceUrl"] = source_url
         entry["statementFilingDate"] = filing_date
+        return (quarter, entry)
+    return None
+
+
+def _jd_find_row(row_map: dict[str, list[str]], *candidates: str) -> list[str] | None:
+    normalized_candidates = [_normalize_table_key(candidate) for candidate in candidates if candidate]
+    for candidate in normalized_candidates:
+        for key, row in row_map.items():
+            if _normalize_table_key(key) == candidate:
+                return row
+    for candidate in normalized_candidates:
+        for key, row in row_map.items():
+            if _normalize_table_key(key).startswith(candidate):
+                return row
+    return None
+
+
+def _parse_jd_release(html_text: str, filing_date: str, source_url: str, currency: str) -> tuple[str, dict[str, Any]] | None:
+    quarter_candidates: dict[str, dict[str, Any]] = {}
+    for rows in _extract_html_tables(html_text):
+        if len(rows) < 4:
+            continue
+        row_map = {_normalize_table_key(row[0]): row for row in rows if row}
+        revenue_row = _jd_find_row(row_map, "totalnetrevenues")
+        cost_row = _jd_find_row(row_map, "costofrevenues")
+        fulfillment_row = _jd_find_row(row_map, "fulfillment")
+        marketing_row = _jd_find_row(row_map, "marketing")
+        rnd_row = _jd_find_row(row_map, "researchanddevelopment", "technologyandcontent")
+        ga_row = _jd_find_row(row_map, "generalandadministrative")
+        operating_income_row = _jd_find_row(
+            row_map,
+            "incomelossfromoperations23",
+            "incomefromoperations23",
+            "incomelossfromoperations",
+            "incomefromoperations",
+            "lossfromoperations",
+            "operatingincome",
+        )
+        pretax_row = _jd_find_row(row_map, "incomelossbeforetax", "incomebeforetax")
+        tax_row = _jd_find_row(
+            row_map,
+            "incometaxexpensesbenefits",
+            "incometaxbenefitsexpenses",
+            "incometaxexpenses",
+            "incometaxexpense",
+        )
+        net_income_row = _jd_find_row(
+            row_map,
+            "netincomelossattributabletothecompanysordinaryshareholders",
+            "netincomeattributabletothecompanysordinaryshareholders",
+            "netlossattributabletoordinaryshareholders",
+            "netincomeattributabletoordinaryshareholders",
+            "netincomelossattributabletoordinaryshareholders",
+            "netincomeloss",
+            "netincome",
+        )
+        if len(rows) < 2 or len(rows[1]) < 2:
+            continue
+        quarter_info = _quarter_from_date_label(rows[1][1], rows[1][1])
+        if quarter_info is None:
+            continue
+        year, quarter_number, _label = quarter_info
+        quarter = f"{year}Q{quarter_number}"
+        period_end = _quarter_period_end(year, quarter_number)
+        current_index = 2
+        candidate = quarter_candidates.setdefault(
+            quarter,
+            {
+                "year": year,
+                "quarterNumber": quarter_number,
+                "periodEnd": period_end,
+            },
+        )
+
+        if revenue_row and cost_row and operating_income_row and pretax_row:
+            revenue_value = _parse_number(revenue_row[current_index]) if len(revenue_row) > current_index else None
+            cost_raw = _parse_number(cost_row[current_index]) if len(cost_row) > current_index else None
+            fulfillment_raw = _parse_number(fulfillment_row[current_index]) if fulfillment_row and len(fulfillment_row) > current_index else None
+            marketing_raw = _parse_number(marketing_row[current_index]) if marketing_row and len(marketing_row) > current_index else None
+            rnd_raw = _parse_number(rnd_row[current_index]) if rnd_row and len(rnd_row) > current_index else None
+            ga_raw = _parse_number(ga_row[current_index]) if ga_row and len(ga_row) > current_index else None
+            operating_income_value = _parse_number(operating_income_row[current_index]) if len(operating_income_row) > current_index else None
+            pretax_value = _parse_number(pretax_row[current_index]) if len(pretax_row) > current_index else None
+            if revenue_value is not None and cost_raw is not None and operating_income_value is not None and pretax_value is not None:
+                candidate["revenueValue"] = revenue_value
+                candidate["costValue"] = abs(cost_raw)
+                candidate["fulfillmentValue"] = abs(fulfillment_raw) if fulfillment_raw is not None else None
+                candidate["marketingValue"] = abs(marketing_raw) if marketing_raw is not None else None
+                candidate["generalAdministrativeValue"] = abs(ga_raw) if ga_raw is not None else None
+                candidate["sgnaValue"] = sum(abs(value) for value in (fulfillment_raw, marketing_raw, ga_raw) if value is not None) or None
+                candidate["rndValue"] = abs(rnd_raw) if rnd_raw is not None else None
+                candidate["operatingIncomeValue"] = operating_income_value
+                candidate["pretaxValue"] = pretax_value
+
+        tax_value = _parse_number(tax_row[current_index]) if tax_row and len(tax_row) > current_index else None
+        net_income_value = _parse_number(net_income_row[current_index]) if net_income_row and len(net_income_row) > current_index else None
+        if tax_value is not None:
+            candidate["taxValue"] = tax_value
+        if net_income_value is not None:
+            candidate["netIncomeValue"] = net_income_value
+
+    for quarter in sorted(quarter_candidates, key=_period_key, reverse=True):
+        candidate = quarter_candidates[quarter]
+        if not all(
+            key in candidate
+            for key in ("revenueValue", "costValue", "operatingIncomeValue", "pretaxValue", "taxValue", "netIncomeValue")
+        ):
+            continue
+        sgna_value = candidate.get("sgnaValue")
+        rnd_value = candidate.get("rndValue")
+        entry = _build_financial_entry(
+            quarter,
+            currency,
+            str(candidate["periodEnd"]),
+            str(candidate["year"]),
+            f"Q{candidate['quarterNumber']}",
+            revenue_value=float(candidate["revenueValue"]) * 1_000_000,
+            cost_value=float(candidate["costValue"]) * 1_000_000,
+            sgna_value=float(sgna_value) * 1_000_000 if sgna_value is not None else None,
+            rnd_value=float(rnd_value) * 1_000_000 if rnd_value is not None else None,
+            operating_income_value=float(candidate["operatingIncomeValue"]) * 1_000_000,
+            pretax_value=float(candidate["pretaxValue"]) * 1_000_000,
+            tax_value=float(candidate["taxValue"]) * 1_000_000,
+            net_income_value=float(candidate["netIncomeValue"]) * 1_000_000,
+        )
+        entry["statementSource"] = "official-sec-6k-ex99"
+        entry["statementSourceUrl"] = source_url
+        entry["statementFilingDate"] = filing_date
+        entry["officialCostBreakdown"] = _build_official_cost_breakdown(
+            total_cost_value=float(candidate["costValue"]) * 1_000_000,
+            source_url=source_url,
+        )
+        opex_items: list[dict[str, Any]] = []
+        for name, name_zh, raw_value in (
+            ("Fulfillment", "履约", candidate.get("fulfillmentValue")),
+            ("Marketing", "营销", candidate.get("marketingValue")),
+            ("G&A", "管理费用", candidate.get("generalAdministrativeValue")),
+            ("R&D", "研发", candidate.get("rndValue")),
+        ):
+            if raw_value is None or raw_value <= 0:
+                continue
+            opex_items.append(
+                _make_breakdown_item(
+                    name,
+                    name_zh,
+                    float(raw_value) * 1_000_000,
+                    value_format="negative-parentheses",
+                    source_url=source_url,
+                )
+            )
+        entry["officialOpexBreakdown"] = opex_items
         return (quarter, entry)
     return None
 
@@ -1022,6 +1574,7 @@ def _load_html_fallback_financials(company: dict[str, Any], cik: int, currency: 
     parser = {
         "tsmc": _parse_tsm_release,
         "asml": _parse_asml_release,
+        "jd-com": _parse_jd_release,
     }.get(str(company.get("id") or ""))
     if parser is None:
         return {}
@@ -1062,6 +1615,14 @@ def _load_html_fallback_financials(company: dict[str, Any], cik: int, currency: 
                 continue
             if any(token in primary_lower for token in ("annualreport", "investorday", "agm")):
                 continue
+        if company["id"] == "jd-com":
+            if form != "6-K" or filing_month not in {3, 5, 8, 11}:
+                continue
+            if any(
+                token in primary_lower
+                for token in ("annualreport", "agm", "environmental", "esg", "sustainability", "investorday", "dividend", "pricing", "notes")
+            ):
+                continue
 
         try:
             index_payload = _request_json(f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession_nodash}/index.json")
@@ -1098,6 +1659,14 @@ def _load_html_fallback_financials(company: dict[str, Any], cik: int, currency: 
                     name,
                 ),
             )
+        if company["id"] == "jd-com":
+            ordered_names = sorted(
+                html_names,
+                key=lambda name: (
+                    0 if "ex99" in name.lower() else 1 if name == primary_document else 2,
+                    name,
+                ),
+            )
         for name in ordered_names:
             if name not in html_names:
                 continue
@@ -1126,20 +1695,20 @@ def _load_html_fallback_financials(company: dict[str, Any], cik: int, currency: 
 
 
 def fetch_official_financial_history(company: dict[str, Any], refresh: bool = False) -> dict[str, Any]:
-    path = _cache_path(str(company["id"]))
+    path = _cache_path(str(company.get("id") or "company"))
     if path.exists() and not refresh:
         return _load_cached_json(path)
 
     cik = _resolve_cik(str(company.get("ticker") or ""), refresh=refresh)
     result = {
-        "id": company["id"],
-        "ticker": company["ticker"],
-        "nameZh": company["nameZh"],
-        "nameEn": company["nameEn"],
-        "slug": company["slug"],
-        "rank": company["rank"],
-        "isAdr": company["isAdr"],
-        "brand": company["brand"],
+        "id": company.get("id"),
+        "ticker": company.get("ticker"),
+        "nameZh": company.get("nameZh"),
+        "nameEn": company.get("nameEn") or company.get("name") or company.get("slug"),
+        "slug": company.get("slug"),
+        "rank": company.get("rank"),
+        "isAdr": company.get("isAdr"),
+        "brand": company.get("brand"),
         "quarters": [],
         "financials": {},
         "statementSource": "official-sec-companyfacts",
@@ -1171,6 +1740,7 @@ def fetch_official_financial_history(company: dict[str, Any], refresh: bool = Fa
 
     concept_series = _collect_concept_series(companyfacts, reporting_currency)
     field_series = _collect_field_series(companyfacts, reporting_currency)
+    optional_breakdown_series = _collect_optional_breakdown_series(companyfacts, reporting_currency)
     quarter_keys = sorted(
         {
             quarter
@@ -1192,12 +1762,22 @@ def fetch_official_financial_history(company: dict[str, Any], refresh: bool = Fa
                 _pick_field_fact_with_fallback(concept_series, field_series, "salesAndMarketing", quarter),
                 _pick_field_fact_with_fallback(concept_series, field_series, "generalAndAdministrative", quarter),
             )
+        sales_marketing_fact = optional_breakdown_series.get("salesAndMarketing", {}).get(quarter)
+        marketing_fact = optional_breakdown_series.get("marketingAdvertising", {}).get(quarter)
+        general_admin_fact = optional_breakdown_series.get("generalAndAdministrative", {}).get(quarter)
         rnd_fact = _pick_field_fact_with_fallback(concept_series, field_series, "rnd", quarter)
+        fulfillment_fact = optional_breakdown_series.get("fulfillment", {}).get(quarter)
+        technology_content_fact = optional_breakdown_series.get("technologyAndContent", {}).get(quarter)
+        restructuring_fact = optional_breakdown_series.get("restructuring", {}).get(quarter)
+        impairment_fact = optional_breakdown_series.get("impairment", {}).get(quarter)
         operating_expenses_fact = _pick_field_fact_with_fallback(concept_series, field_series, "operatingExpenses", quarter)
         operating_income_fact = _pick_field_fact_with_fallback(concept_series, field_series, "operatingIncome", quarter)
         pretax_fact = _pick_field_fact_with_fallback(concept_series, field_series, "pretaxIncome", quarter)
         tax_fact = _pick_field_fact_with_fallback(concept_series, field_series, "tax", quarter)
         net_income_fact = _pick_field_fact_with_fallback(concept_series, field_series, "netIncome", quarter)
+        cost_products_fact = optional_breakdown_series.get("costProducts", {}).get(quarter)
+        cost_services_fact = optional_breakdown_series.get("costServices", {}).get(quarter)
+        tac_fact = optional_breakdown_series.get("trafficAcquisitionCost", {}).get(quarter)
 
         revenue_value = revenue_fact.value if revenue_fact else None
         cost_value = cost_fact.value if cost_fact else None
@@ -1265,6 +1845,30 @@ def fetch_official_financial_history(company: dict[str, Any], refresh: bool = Fa
             tax_value=tax_fact.value if tax_fact else None,
             net_income_value=net_income_fact.value if net_income_fact else None,
         )
+        cost_breakdown = _build_official_cost_breakdown(
+            total_cost_value=cost_value,
+            products_fact=cost_products_fact,
+            services_fact=cost_services_fact,
+            tac_fact=tac_fact,
+            source_url=source_url,
+        )
+        if cost_breakdown:
+            financials[quarter]["officialCostBreakdown"] = cost_breakdown
+        opex_breakdown = _build_official_opex_breakdown(
+            operating_expenses_value=operating_expenses_value,
+            sgna_fact=sgna_fact,
+            sales_marketing_fact=sales_marketing_fact,
+            marketing_fact=marketing_fact,
+            general_admin_fact=general_admin_fact,
+            rnd_fact=rnd_fact,
+            fulfillment_fact=fulfillment_fact,
+            technology_content_fact=technology_content_fact,
+            restructuring_fact=restructuring_fact,
+            impairment_fact=impairment_fact,
+            source_url=source_url,
+        )
+        if opex_breakdown:
+            financials[quarter]["officialOpexBreakdown"] = opex_breakdown
 
     fallback_financials = _load_html_fallback_financials(company, cik, reporting_currency)
     if fallback_financials:

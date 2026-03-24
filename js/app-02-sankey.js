@@ -167,6 +167,14 @@ function renderPixelReplicaSvg(snapshot) {
     baseRightX + (safeNumber(snapshot.layout?.opexTargetX, layoutBaseRightX - 24) - layoutBaseRightX)
   );
   const rawCostBreakdown = [...(snapshot.costBreakdown || [])].filter((item) => safeNumber(item.valueBn) > 0.02);
+  const rawOpexTerminalCount = [...(snapshot.opexBreakdown || [])].filter((item) => safeNumber(item?.valueBn) > 0.02).length;
+  const rawBelowTerminalCount = [...(snapshot.belowOperatingItems || [])].filter((item) => safeNumber(item?.valueBn) > 0.02).length;
+  const alignCostBreakdownWithOperatingStage =
+    rawCostBreakdown.length > 0 &&
+    safeNumber(
+      snapshot.layout?.alignCostBreakdownWithOperatingStage,
+      rawCostBreakdown.length >= 2 || rawOpexTerminalCount + rawBelowTerminalCount > 0 ? 1 : 0
+    ) > 0;
   const rawCostBreakdownX = shiftCanvasX(
     snapshot.layout?.costBreakdownX,
     stageLayout.grossX + (safeNumber(snapshot.layout?.costBreakdownX, 1294) - safeNumber(snapshot.layout?.grossX, 1122))
@@ -216,11 +224,15 @@ function renderPixelReplicaSvg(snapshot) {
     grossX + costBreakdownRunwayMinX
   );
   const costBreakdownX =
-    snapshot.layout?.costBreakdownX !== null && snapshot.layout?.costBreakdownX !== undefined
+    alignCostBreakdownWithOperatingStage
+      ? opX
+      : snapshot.layout?.costBreakdownX !== null && snapshot.layout?.costBreakdownX !== undefined
       ? clamp(rawCostBreakdownX, grossX + costBreakdownRunwayMinX, costBreakdownRunwayMaxX)
       : clamp(costBreakdownAutoX, grossX + costBreakdownRunwayMinX, costBreakdownRunwayMaxX);
   const costBreakdownOpexCollisionTriggerX = safeNumber(snapshot.layout?.costBreakdownOpexCollisionTriggerX, 92);
-  const costBreakdownNearOpexColumn = rawCostBreakdown.length > 0 && costBreakdownX >= opX - costBreakdownOpexCollisionTriggerX;
+  const costBreakdownNearOpexColumn =
+    rawCostBreakdown.length > 0 && (alignCostBreakdownWithOperatingStage || costBreakdownX >= opX - costBreakdownOpexCollisionTriggerX);
+  const costBreakdownExpandedFanout = rawCostBreakdown.length >= 2 && (alignCostBreakdownWithOperatingStage || costBreakdownNearOpexColumn);
   const costBreakdownLabelX = shiftCanvasX(
     snapshot.layout?.costBreakdownLabelX,
     stageLayout.grossX + (safeNumber(snapshot.layout?.costBreakdownLabelX, 1362) - safeNumber(snapshot.layout?.grossX, 1122))
@@ -230,14 +242,23 @@ function renderPixelReplicaSvg(snapshot) {
     snapshot.layout?.rightLabelX,
     baseRightX + (safeNumber(snapshot.layout?.rightLabelX, layoutBaseRightX + 62) - layoutBaseRightX)
   );
-  const opexLabelX = shiftCanvasX(
+  const opexLabelXBase = shiftCanvasX(
     snapshot.layout?.opexLabelX,
     baseRightX + (safeNumber(snapshot.layout?.opexLabelX, safeNumber(snapshot.layout?.opexTargetX, layoutBaseRightX - 24) + 62) - layoutBaseRightX)
   );
-  const belowLabelX = shiftCanvasX(
+  const belowLabelXBase = shiftCanvasX(
     snapshot.layout?.belowLabelX,
     baseRightX + (safeNumber(snapshot.layout?.belowLabelX, safeNumber(snapshot.layout?.rightLabelX, layoutBaseRightX + 62)) - layoutBaseRightX)
   );
+  const negativeTerminalLabelX = Math.max(
+    rightBaseX + nodeWidth + rightBranchLabelGapX,
+    rightLabelXBase,
+    opexLabelXBase,
+    belowLabelXBase,
+    costBreakdownLabelX
+  );
+  const opexLabelX = negativeTerminalLabelX;
+  const belowLabelX = negativeTerminalLabelX;
   const rightLabelPaddingRight = safeNumber(snapshot.layout?.rightLabelPaddingRight, 44);
   const rightTerminalTitleMaxWidth = Math.max(width - (rightBaseX + nodeWidth + rightBranchLabelGapX) - rightLabelPaddingRight, 120);
   const costTerminalTitleMaxWidth = Math.max(
@@ -260,10 +281,14 @@ function renderPixelReplicaSvg(snapshot) {
     snapshot.costOfRevenueBn !== null && snapshot.costOfRevenueBn !== undefined
       ? Math.max(safeNumber(snapshot.costOfRevenueBn), 0)
       : Math.max(revenueBn - grossProfitBn, 0);
-  const operatingProfitBn = Math.max(safeNumber(snapshot.operatingProfitBn), 0);
+  const rawOperatingProfitBn = safeNumber(snapshot.operatingProfitBn);
+  const hasOperatingLoss = rawOperatingProfitBn < -0.02;
+  const operatingProfitBn = hasOperatingLoss ? 0 : Math.max(rawOperatingProfitBn, 0);
   const operatingExpensesBn =
     snapshot.operatingExpensesBn !== null && snapshot.operatingExpensesBn !== undefined
-      ? Math.max(safeNumber(snapshot.operatingExpensesBn), 0)
+      ? hasOperatingLoss
+        ? Math.min(Math.max(safeNumber(snapshot.operatingExpensesBn), 0), grossProfitBn)
+        : Math.max(safeNumber(snapshot.operatingExpensesBn), 0)
       : Math.max(grossProfitBn - operatingProfitBn, 0);
   const netOutcomeBn = resolvedNetOutcomeValue(snapshot);
   const netLoss = isLossMakingNetOutcome(snapshot);
@@ -1317,10 +1342,28 @@ function renderPixelReplicaSvg(snapshot) {
   const costBreakdownBand = prototypeBandConfig(templateTokens, "costBreakdown");
   const costBreakdownSourceAnchored = costBreakdownSlices.length > 0 && costBreakdownSlices.length <= 3;
   const costBreakdownCenterBaseShiftY = scaleY(
-    safeNumber(snapshot.layout?.costBreakdownCenterBaseShiftY, costBreakdownSlices.length <= 1 ? 18 : 26)
+    safeNumber(
+      snapshot.layout?.costBreakdownCenterBaseShiftY,
+      costBreakdownSlices.length <= 1
+        ? 18
+        : costBreakdownExpandedFanout
+          ? costBreakdownSlices.length === 2
+            ? 42
+            : 34
+          : 26
+    )
   );
   const costBreakdownCenterStepY = scaleY(
-    safeNumber(snapshot.layout?.costBreakdownCenterStepY, costBreakdownSlices.length === 2 ? 72 : 68)
+    safeNumber(
+      snapshot.layout?.costBreakdownCenterStepY,
+      costBreakdownSlices.length === 2
+        ? costBreakdownExpandedFanout
+          ? 138
+          : 72
+        : costBreakdownExpandedFanout
+          ? 102
+          : 68
+    )
   );
   const costBreakdownHeightBias = safeNumber(snapshot.layout?.costBreakdownHeightBias, 0.09);
   const costBreakdownBottomReleaseY =
@@ -1332,6 +1375,26 @@ function renderPixelReplicaSvg(snapshot) {
   const costBreakdownBottomPadY = Math.max(
     rightBandBottomPadding - costBreakdownBottomReleaseY,
     scaleY(safeNumber(snapshot.layout?.costBreakdownMinBottomPadY, costBreakdownNearOpexColumn ? 26 : 34))
+  );
+  const costBreakdownBandGapY = scaleY(
+    safeNumber(
+      snapshot.layout?.costBreakdownBandGapY,
+      costBreakdownExpandedFanout
+        ? costBreakdownSlices.length === 2
+          ? 44
+          : 34
+        : safeNumber(costBreakdownBand.gap, 24)
+    )
+  );
+  const costBreakdownBandMinGapY = scaleY(
+    safeNumber(
+      snapshot.layout?.costBreakdownBandMinGapY,
+      costBreakdownExpandedFanout
+        ? costBreakdownSlices.length === 2
+          ? 18
+          : 14
+        : safeNumber(costBreakdownBand.minGap, 10)
+    )
   );
   const costBreakdownEntries = costBreakdownSlices.map((slice, index) => {
     const layout = replicaTreeBlockLayout(slice.item, {
@@ -1356,12 +1419,19 @@ function renderPixelReplicaSvg(snapshot) {
   });
   const costBreakdownRequiredSpanY = estimatedStackSpan(
     costBreakdownEntries.map((entry) => entry.height),
-    scaleY(safeNumber(costBreakdownBand.gap, 24))
+    costBreakdownBandGapY
   );
   let costBreakdownMaxY = clamp(
     Math.max(
       scaleY(safeNumber(costBreakdownBand.maxY, 1002)),
-      scaleY(safeNumber(costBreakdownBand.minY, 744)) + costBreakdownRequiredSpanY + scaleY(safeNumber(snapshot.layout?.costBreakdownSelfBottomBufferY, 78))
+      scaleY(safeNumber(costBreakdownBand.minY, 744)) +
+        costBreakdownRequiredSpanY +
+        scaleY(
+          safeNumber(
+            snapshot.layout?.costBreakdownSelfBottomBufferY,
+            costBreakdownExpandedFanout ? (costBreakdownSlices.length === 2 ? 122 : 102) : 78
+          )
+        )
     ),
     scaleY(safeNumber(costBreakdownBand.minY, 744)) + scaleY(90),
     height - costBreakdownBottomPadY
@@ -1371,8 +1441,8 @@ function renderPixelReplicaSvg(snapshot) {
     scaleY(safeNumber(costBreakdownBand.minY, 744)),
     costBreakdownMaxY,
     {
-      gap: scaleY(safeNumber(costBreakdownBand.gap, 24)),
-      minGap: scaleY(safeNumber(costBreakdownBand.minGap, 10)),
+      gap: costBreakdownBandGapY,
+      minGap: costBreakdownBandMinGapY,
       fallbackMinHeight: 34,
     }
   );
@@ -1453,7 +1523,7 @@ function renderPixelReplicaSvg(snapshot) {
     opX + nodeWidth / 2,
     operatingMetricPlacementY,
     snapshot.operatingProfitLabel || "Operating profit",
-    formatBillions(operatingProfitBn),
+    formatBillions(rawOperatingProfitBn),
     snapshot.operatingMarginPct !== null && snapshot.operatingMarginPct !== undefined ? `${formatPct(snapshot.operatingMarginPct)} ${marginLabel()}` : "",
     snapshot.operatingMarginYoyDeltaPp !== null && snapshot.operatingMarginYoyDeltaPp !== undefined ? formatPp(snapshot.operatingMarginYoyDeltaPp) : "",
     operatingMetricPlacementLayout
@@ -1507,6 +1577,20 @@ function renderPixelReplicaSvg(snapshot) {
         : entry
     );
   const totalPositiveStackHeight = totalPositiveHeight + Math.max(0, positiveAdjustments.length - 1) * positiveGap;
+  const maxPositiveLabelBlockWidth = positiveAdjustments.reduce((maxWidth, item) => {
+    const positiveNameSize = String(item.name || "").length > 14 ? 18 : 22;
+    const positiveValueSize = String(item.name || "").length > 14 ? 18 : 20;
+    const labelWidth = Math.max(
+      approximateTextWidth(localizeChartPhrase(item.name), positiveNameSize),
+      approximateTextWidth(formatItemBillions(item, "positive-plus"), positiveValueSize),
+      1
+    );
+    return Math.max(
+      maxWidth,
+      labelWidth + scaleY(safeNumber(snapshot.layout?.positiveLabelWidthPaddingX, 10)) * 2
+    );
+  }, 0);
+  const positiveDecisionCorridorWidth = Math.max(positiveDecisionCorridorMaxX - positiveDecisionCorridorMinX, 1);
   const positiveBelowTopMin = Math.max(netBottom + positiveNodeGap, scaleY(308));
   const positiveBelowTopMax = chartBottomLimit - totalPositiveStackHeight - positiveLabelBlockHeight - scaleY(12);
   const positiveBelowReservedHeight =
@@ -1569,10 +1653,27 @@ function renderPixelReplicaSvg(snapshot) {
     (positiveUpperObstacleFloorEstimate +
       scaleY(safeNumber(snapshot.layout?.positiveAboveCorridorTopGapY, 10)) +
       scaleY(safeNumber(snapshot.layout?.positiveAboveCorridorBottomGapY, 14)));
-  const abovePositiveRequiredHeight = totalPositiveStackHeight;
+  const abovePositiveRequiredHeight =
+    totalPositiveStackHeight +
+    positiveLabelBlockHeight +
+    Math.max(
+      scaleY(safeNumber(snapshot.layout?.positiveAboveLabelGapY, 8)),
+      positiveFloatPadding * safeNumber(snapshot.layout?.positiveAboveLabelGapFactor, 0.72)
+    );
   const abovePositiveFeasible = positiveAdjustments.length ? abovePositiveCorridorHeight >= abovePositiveRequiredHeight : false;
   const belowPositiveSlack = positiveAdjustments.length ? belowPositiveClearance - positiveFloatPadding * 0.8 : -Infinity;
-  const abovePositiveSlack = positiveAdjustments.length ? abovePositiveCorridorHeight - abovePositiveRequiredHeight : -Infinity;
+  const abovePositiveWidthShortfall = positiveAdjustments.length
+    ? Math.max(
+        maxPositiveLabelBlockWidth -
+          positiveDecisionCorridorWidth * safeNumber(snapshot.layout?.positiveAboveUsableCorridorWidthFactor, 0.92),
+        0
+      )
+    : 0;
+  const abovePositiveSlack = positiveAdjustments.length
+    ? abovePositiveCorridorHeight -
+      abovePositiveRequiredHeight -
+      abovePositiveWidthShortfall * safeNumber(snapshot.layout?.positiveAboveWidthPenaltyFactor, 0.36)
+    : -Infinity;
   const belowPositiveComfortable = positiveAdjustments.length
     ? belowPositiveClearance >= Math.max(scaleY(36), positiveFloatPadding * 1.35, totalPositiveStackHeight * 1.2)
     : false;
@@ -1945,12 +2046,38 @@ function renderPixelReplicaSvg(snapshot) {
   const costBreakdownNodeHeights = costBreakdownSlices.map((slice) => Math.max(safeNumber(slice?.height, 0), 12));
   const costBreakdownPackingHeights = costBreakdownSlices.map((slice, index) =>
     resolveTerminalPackingHeight(costBreakdownNodeHeights[index], costBreakdownLabelSpecs[index]?.collisionHeight, {
-      maxExtraY: costBreakdownSlices.length === 2 ? (costBreakdownNearOpexColumn ? 44 : 52) : 40,
+      maxExtraY:
+        costBreakdownSlices.length === 2
+          ? costBreakdownNearOpexColumn
+            ? costBreakdownExpandedFanout
+              ? 96
+              : 44
+            : costBreakdownExpandedFanout
+              ? 72
+              : 52
+          : costBreakdownExpandedFanout
+            ? costBreakdownSlices.length >= 4
+              ? 108
+              : 84
+            : 40,
     })
   );
   const costBreakdownBarrierHeights = costBreakdownSlices.map((slice, index) =>
     resolveTerminalPackingHeight(costBreakdownNodeHeights[index], costBreakdownLabelSpecs[index]?.collisionHeight, {
-      maxExtraY: costBreakdownSlices.length === 2 ? (costBreakdownNearOpexColumn ? 52 : 80) : 64,
+      maxExtraY:
+        costBreakdownSlices.length === 2
+          ? costBreakdownNearOpexColumn
+            ? costBreakdownExpandedFanout
+              ? 110
+              : 52
+            : costBreakdownExpandedFanout
+              ? 88
+              : 80
+          : costBreakdownExpandedFanout
+            ? costBreakdownSlices.length >= 4
+              ? 132
+              : 104
+            : 64,
     })
   );
   const costBreakdownGapHeights = costBreakdownSlices.map((slice, index) =>
@@ -1968,7 +2095,10 @@ function renderPixelReplicaSvg(snapshot) {
               )
           )
         )
-      : costBreakdownNodeHeights[index]
+      : Math.max(
+          costBreakdownNodeHeights[index],
+          costBreakdownExpandedFanout ? safeNumber(costBreakdownPackingHeights[index], costBreakdownNodeHeights[index]) : costBreakdownNodeHeights[index]
+        )
   );
   const costBreakdownTerminalTopBarrierY = costBreakdownSharesOpexColumn
     ? costBreakdownOpexSummaryBottom + costBreakdownOpexAvoidanceY
@@ -1976,13 +2106,37 @@ function renderPixelReplicaSvg(snapshot) {
   const desiredCostBreakdownNodeGapY = scaleY(
     safeNumber(
       snapshot.layout?.costBreakdownNodeGapY,
-      costBreakdownSlices.length >= 3 ? 20 : costBreakdownSlices.length === 2 ? (costBreakdownSharesOpexColumn ? 52 : 54) : 38
+      costBreakdownSlices.length >= 3
+        ? costBreakdownExpandedFanout
+          ? 32
+          : 20
+        : costBreakdownSlices.length === 2
+          ? costBreakdownSharesOpexColumn
+            ? costBreakdownExpandedFanout
+              ? 84
+              : 52
+            : costBreakdownExpandedFanout
+              ? 66
+              : 54
+          : 38
     )
   );
   const costBreakdownTerminalGap = scaleY(
     safeNumber(
       snapshot.layout?.costBreakdownTerminalGapY,
-      costBreakdownSlices.length >= 3 ? 14 : costBreakdownSlices.length === 2 ? (costBreakdownSharesOpexColumn ? 52 : 44) : 22
+      costBreakdownSlices.length >= 3
+        ? costBreakdownExpandedFanout
+          ? 26
+          : 14
+        : costBreakdownSlices.length === 2
+          ? costBreakdownSharesOpexColumn
+            ? costBreakdownExpandedFanout
+              ? 86
+              : 52
+            : costBreakdownExpandedFanout
+              ? 58
+              : 44
+          : 22
     )
   );
   const costBreakdownTerminalTopFloor = Math.max(
@@ -2007,7 +2161,17 @@ function renderPixelReplicaSvg(snapshot) {
   const costBreakdownBarrierAwareBottomBufferY = scaleY(
     safeNumber(
       snapshot.layout?.costBreakdownBarrierAwareBottomBufferY,
-      costBreakdownSlices.length === 2 ? (costBreakdownSharesOpexColumn ? 34 : 24) : 18
+      costBreakdownSlices.length === 2
+        ? costBreakdownSharesOpexColumn
+          ? costBreakdownExpandedFanout
+            ? 54
+            : 34
+          : costBreakdownExpandedFanout
+            ? 34
+            : 24
+        : costBreakdownExpandedFanout
+          ? 26
+          : 18
     )
   );
   costBreakdownMaxY = clamp(
@@ -2021,7 +2185,19 @@ function renderPixelReplicaSvg(snapshot) {
   if (costBreakdownSharesOpexColumn) {
     costBreakdownMaxY = Math.min(
       costBreakdownBottomLimit,
-      costBreakdownMaxY + scaleY(safeNumber(snapshot.layout?.costBreakdownSharedLaneReleaseY, costBreakdownSlices.length === 2 ? 54 : 34))
+      costBreakdownMaxY +
+        scaleY(
+          safeNumber(
+            snapshot.layout?.costBreakdownSharedLaneReleaseY,
+            costBreakdownExpandedFanout
+              ? costBreakdownSlices.length === 2
+                ? 112
+                : 64
+              : costBreakdownSlices.length === 2
+                ? 54
+                : 34
+          )
+        )
     );
   }
   const baseSharedCostBreakdownMaxY = costBreakdownMaxY;
@@ -2090,31 +2266,187 @@ function renderPixelReplicaSvg(snapshot) {
     clampCostBreakdownBoxesToBounds();
     return appliedShiftY;
   };
+  const resolveCostBreakdownMinDownwardShiftY = (index) => {
+    const configuredShiftY =
+      Array.isArray(snapshot.layout?.costBreakdownMinDownwardShiftByIndex)
+        ? snapshot.layout.costBreakdownMinDownwardShiftByIndex[index]
+        : snapshot.layout?.costBreakdownMinDownwardShiftY;
+    const defaultShiftY =
+      costBreakdownSlices.length === 2
+        ? index === 0
+          ? Math.max(12, 42 - 34 * costBreakdownSharedLaneCrowdingStrength)
+          : Math.max(104, 138 - 24 * costBreakdownSharedLaneCrowdingStrength)
+        : costBreakdownSlices.length <= 1
+          ? 24
+          : index === 0
+            ? 24
+            : 52 + (index - 1) * 18;
+    return scaleY(safeNumber(configuredShiftY, defaultShiftY));
+  };
+  const resolveCostBreakdownDownwardCenterFloor = (index, fallbackCenter = 0) => {
+    const slice = costBreakdownSourceSlices[index] || costBreakdownSlices[index];
+    if (!slice) return -Infinity;
+    return safeNumber(slice.center, fallbackCenter) + resolveCostBreakdownMinDownwardShiftY(index);
+  };
+  const resolveCostBreakdownCenterBounds = (index, box = costBreakdownBoxes[index]) => {
+    const packingHeight = Math.max(safeNumber(costBreakdownPackingHeights[index], box?.height), safeNumber(box?.height, 0), 1);
+    const barrierHeight = Math.max(safeNumber(costBreakdownBarrierHeights[index], packingHeight), packingHeight, 1);
+    return {
+      packingHeight,
+      barrierHeight,
+      minCenter: Math.max(
+        costBreakdownTerminalTopFloor + packingHeight / 2,
+        costBreakdownSharesOpexColumn ? costBreakdownTerminalTopBarrierY + barrierHeight / 2 : -Infinity,
+        resolveCostBreakdownDownwardCenterFloor(index, safeNumber(box?.center, 0))
+      ),
+      maxCenter: costBreakdownMaxY - packingHeight / 2,
+    };
+  };
+  const resolveCostBreakdownSpacingHeight = (index, box = costBreakdownBoxes[index]) =>
+    Math.max(
+      safeNumber(costBreakdownNodeHeights[index], 0),
+      Math.min(
+        safeNumber(costBreakdownGapHeights[index], safeNumber(costBreakdownNodeHeights[index], 0)),
+        safeNumber(costBreakdownNodeHeights[index], 0) +
+          scaleY(
+            safeNumber(
+              snapshot.layout?.costBreakdownUniformSpacingExtraCapY,
+              costBreakdownSlices.length >= 5 ? 14 : costBreakdownSlices.length >= 3 ? 10 : 8
+            )
+          )
+      ),
+      1
+    );
   const clampCostBreakdownBoxesToBounds = () => {
     costBreakdownBoxes.forEach((box, index) => {
       if (!box) return;
-      const packingHeight = Math.max(safeNumber(costBreakdownPackingHeights[index], box.height), safeNumber(box.height, 0), 1);
-      const barrierHeight = Math.max(safeNumber(costBreakdownBarrierHeights[index], packingHeight), packingHeight, 1);
-      const minCenter = Math.max(
-        costBreakdownTerminalTopFloor + packingHeight / 2,
-        costBreakdownSharesOpexColumn ? costBreakdownTerminalTopBarrierY + barrierHeight / 2 : -Infinity
-      );
-      const maxCenter = costBreakdownMaxY - packingHeight / 2;
+      const { minCenter, maxCenter } = resolveCostBreakdownCenterBounds(index, box);
       if (!(maxCenter >= minCenter)) return;
       costBreakdownBoxes[index] = shiftBoxCenter(box, clamp(box.center, minCenter, maxCenter));
     });
   };
-  const maintainCostBreakdownNodeGap = () => {
-    clampCostBreakdownBoxesToBounds();
-    if (costBreakdownBoxes.length !== 2) return;
-    enforceMinimumCenterGap(
-      costBreakdownBoxes,
-      [costBreakdownSourceSlices[0] || costBreakdownSlices[0], costBreakdownSourceSlices[1] || costBreakdownSlices[1]],
-      desiredCostBreakdownNodeGapY,
-      costBreakdownTerminalTopFloor,
-      costBreakdownMaxY,
-      costBreakdownGapHeights
+  const resolveUniformCostBreakdownCenters = (gapY) => {
+    if (costBreakdownBoxes.length <= 1 || costBreakdownBoxes.some((box) => !box)) return null;
+    const resolvedGapY = Math.max(safeNumber(gapY, 0), 0);
+    const spacingHeights = costBreakdownBoxes.map((box, index) => resolveCostBreakdownSpacingHeight(index, box));
+    const prefixDistances = [];
+    let cumulativeDistance = 0;
+    spacingHeights.forEach((height, index) => {
+      if (index === 0) {
+        prefixDistances.push(0);
+        return;
+      }
+      cumulativeDistance += spacingHeights[index - 1] / 2 + resolvedGapY + height / 2;
+      prefixDistances.push(cumulativeDistance);
+    });
+    let minStartCenter = -Infinity;
+    let maxStartCenter = Infinity;
+    spacingHeights.forEach((_height, index) => {
+      const { minCenter, maxCenter } = resolveCostBreakdownCenterBounds(index, costBreakdownBoxes[index]);
+      minStartCenter = Math.max(minStartCenter, minCenter - prefixDistances[index]);
+      maxStartCenter = Math.min(maxStartCenter, maxCenter - prefixDistances[index]);
+    });
+    if (!(maxStartCenter >= minStartCenter)) return null;
+    const currentTop = Math.min(
+      ...costBreakdownBoxes.map((box, index) => safeNumber(box?.center, 0) - spacingHeights[index] / 2)
     );
+    const currentBottom = Math.max(
+      ...costBreakdownBoxes.map((box, index) => safeNumber(box?.center, 0) + spacingHeights[index] / 2)
+    );
+    const currentClusterCenter = (currentTop + currentBottom) / 2;
+    const terminalOffset =
+      (prefixDistances[prefixDistances.length - 1] + spacingHeights[spacingHeights.length - 1] / 2 - spacingHeights[0] / 2) / 2;
+    const anchoredStartCenter = clamp(currentClusterCenter - terminalOffset, minStartCenter, maxStartCenter);
+    return prefixDistances.map((distance) => anchoredStartCenter + distance);
+  };
+  const findCostBreakdownFeasibleGap = (minGapY, maxGapY) => {
+    let lowerGapY = Math.max(safeNumber(minGapY, 0), 0);
+    let upperGapY = Math.max(safeNumber(maxGapY, lowerGapY), lowerGapY);
+    let bestGapY = resolveUniformCostBreakdownCenters(lowerGapY) ? lowerGapY : 0;
+    if (!(upperGapY > lowerGapY + 0.01)) return bestGapY;
+    for (let pass = 0; pass < 18; pass += 1) {
+      const candidateGapY = (lowerGapY + upperGapY) / 2;
+      if (resolveUniformCostBreakdownCenters(candidateGapY)) {
+        bestGapY = candidateGapY;
+        lowerGapY = candidateGapY;
+      } else {
+        upperGapY = candidateGapY;
+      }
+    }
+    return bestGapY;
+  };
+  const rebalanceCostBreakdownSpacing = (options = {}) => {
+    if (costBreakdownBoxes.length <= 1 || costBreakdownBoxes.some((box) => !box)) return false;
+    const baseGapY = Math.max(
+      safeNumber(options.minimumGapY, Math.max(costBreakdownTerminalGap, desiredCostBreakdownNodeGapY)),
+      scaleY(8)
+    );
+    let feasibleBaseGapY = baseGapY;
+    let targetCenters = resolveUniformCostBreakdownCenters(feasibleBaseGapY);
+    if (!targetCenters) {
+      feasibleBaseGapY = findCostBreakdownFeasibleGap(0, baseGapY);
+      targetCenters = resolveUniformCostBreakdownCenters(feasibleBaseGapY);
+    }
+    if (!targetCenters) return false;
+    const totalSpacingHeight = costBreakdownBoxes.reduce(
+      (sum, box, index) => sum + resolveCostBreakdownSpacingHeight(index, box),
+      0
+    );
+    const theoreticalGapCeilingY = Math.max(
+      feasibleBaseGapY,
+      (costBreakdownMaxY - costBreakdownTerminalTopFloor - totalSpacingHeight) / Math.max(costBreakdownBoxes.length - 1, 1)
+    );
+    const feasibleMaxGapY = findCostBreakdownFeasibleGap(feasibleBaseGapY, theoreticalGapCeilingY);
+    const defaultSpacingFill =
+      costBreakdownSlices.length >= 5
+        ? costBreakdownSharesOpexColumn
+          ? 0.92
+          : 0.86
+        : costBreakdownSlices.length === 4
+          ? costBreakdownSharesOpexColumn
+            ? 0.84
+            : 0.76
+          : costBreakdownSlices.length === 3
+            ? costBreakdownExpandedFanout
+              ? 0.7
+              : 0.58
+            : costBreakdownExpandedFanout
+              ? 0.46
+              : 0.34;
+    const spacingFill = clamp(
+      safeNumber(options.spacingFill, safeNumber(snapshot.layout?.costBreakdownSpacingFill, defaultSpacingFill)),
+      0,
+      1
+    );
+    const targetGapY = feasibleBaseGapY + Math.max(feasibleMaxGapY - feasibleBaseGapY, 0) * spacingFill;
+    const resolvedTargetCenters =
+      resolveUniformCostBreakdownCenters(targetGapY) ||
+      resolveUniformCostBreakdownCenters(feasibleMaxGapY) ||
+      targetCenters;
+    const strength = clamp(safeNumber(options.strength, 1), 0, 1);
+    costBreakdownBoxes.forEach((box, index) => {
+      if (!box) return;
+      const targetCenter = safeNumber(resolvedTargetCenters[index], box.center);
+      const nextCenter = box.center + (targetCenter - box.center) * strength;
+      costBreakdownBoxes[index] = shiftBoxCenter(box, nextCenter);
+    });
+    clampCostBreakdownBoxesToBounds();
+    return true;
+  };
+  const maintainCostBreakdownNodeGap = (options = {}) => {
+    clampCostBreakdownBoxesToBounds();
+    if (costBreakdownBoxes.length <= 1) return;
+    const rebalanced = rebalanceCostBreakdownSpacing(options);
+    if (!rebalanced && costBreakdownBoxes.length === 2) {
+      enforceMinimumCenterGap(
+        costBreakdownBoxes,
+        [costBreakdownSourceSlices[0] || costBreakdownSlices[0], costBreakdownSourceSlices[1] || costBreakdownSlices[1]],
+        desiredCostBreakdownNodeGapY,
+        costBreakdownTerminalTopFloor,
+        costBreakdownMaxY,
+        costBreakdownGapHeights
+      );
+    }
     clampCostBreakdownBoxesToBounds();
   };
   if (costBreakdownSlices.length > 1) {
@@ -2159,7 +2491,8 @@ function renderPixelReplicaSvg(snapshot) {
         Math.max(costBreakdownRequiredSpan / costBreakdownAvailableSpan - 0.42, 0) * 0.9 +
           Math.max(costBreakdownSlices.length - 1, 0) * 0.12 +
           clamp(lowerRightPressureY / scaleY(92), 0, 1) * 0.34 +
-          (costBreakdownSharesOpexColumn ? 0.14 : 0)
+          (costBreakdownSharesOpexColumn ? 0.14 : 0) +
+          (costBreakdownExpandedFanout ? 0.18 : 0)
       ),
       0,
       0.78
@@ -2205,28 +2538,16 @@ function renderPixelReplicaSvg(snapshot) {
     );
     costBreakdownTerminalBands.forEach((band, index) => {
       const slice = costBreakdownSourceSlices[index] || costBreakdownSlices[index];
-      const minDownwardShiftY = scaleY(
-        safeNumber(
-          snapshot.layout?.costBreakdownMinDownwardShiftY,
-          costBreakdownSlices.length === 2
-            ? index === 0
-              ? Math.max(12, 42 - 34 * costBreakdownSharedLaneCrowdingStrength)
-              : Math.max(104, 138 - 24 * costBreakdownSharedLaneCrowdingStrength)
-            : index === 0
-              ? 24
-              : 52 + (index - 1) * 18
-        )
+      const enforcedCenter = Math.max(
+        band.center,
+        resolveCostBreakdownDownwardCenterFloor(index, safeNumber(slice?.center, band.center))
       );
-      const enforcedCenter = Math.max(band.center, safeNumber(slice?.center, band.center) + minDownwardShiftY);
       costBreakdownBoxes[index] = shiftBoxCenter(costBreakdownBoxes[index], enforcedCenter);
     });
     maintainCostBreakdownNodeGap();
   } else if (costBreakdownBoxes.length === 1 && costBreakdownTerminalTopBarrierY > 0) {
     const box = costBreakdownBoxes[0];
-    const packingHeight = Math.max(safeNumber(costBreakdownPackingHeights[0], box.height), safeNumber(box.height, 0), 1);
-    const barrierHeight = Math.max(safeNumber(costBreakdownBarrierHeights[0], packingHeight), packingHeight, 1);
-    const minCenter = Math.max(costBreakdownTerminalTopFloor + packingHeight / 2, costBreakdownTerminalTopBarrierY + barrierHeight / 2);
-    const maxCenter = costBreakdownMaxY - packingHeight / 2;
+    const { minCenter, maxCenter } = resolveCostBreakdownCenterBounds(0, box);
     costBreakdownBoxes[0] = shiftBoxCenter(box, clamp(Math.max(box.center, minCenter), minCenter, maxCenter));
   }
   clampCostBreakdownBoxesToBounds();
@@ -2475,13 +2796,7 @@ function renderPixelReplicaSvg(snapshot) {
         opexBoxes[entry.index] = shiftBoxCenter(opexBoxes[entry.index], band.center);
       } else {
         const box = costBreakdownBoxes[entry.index];
-        const packingHeight = Math.max(safeNumber(costBreakdownPackingHeights[entry.index], box?.height), safeNumber(box?.height, 0), 1);
-        const barrierHeight = Math.max(safeNumber(costBreakdownBarrierHeights[entry.index], packingHeight), packingHeight, 1);
-        const minCenter = Math.max(
-          costBreakdownTerminalTopFloor + packingHeight / 2,
-          costBreakdownSharesOpexColumn ? costBreakdownTerminalTopBarrierY + barrierHeight / 2 : -Infinity
-        );
-        const maxCenter = costBreakdownMaxY - packingHeight / 2;
+        const { minCenter, maxCenter } = resolveCostBreakdownCenterBounds(entry.index, box);
         costBreakdownBoxes[entry.index] = shiftBoxCenter(box, clamp(band.center, minCenter, maxCenter));
       }
     });
@@ -2500,8 +2815,10 @@ function renderPixelReplicaSvg(snapshot) {
         }
       }
     }
-    if (costBreakdownSharesOpexColumn && costBreakdownBoxes.length) {
+    if (costBreakdownBoxes.length) {
       maintainCostBreakdownNodeGap();
+    }
+    if (costBreakdownSharesOpexColumn && costBreakdownBoxes.length) {
       const topBarrierDeficit = costBreakdownTerminalTopBarrierY - costBreakdownCollisionTop();
       if (topBarrierDeficit > 0.5) {
         shiftCostBreakdownGroupDown(topBarrierDeficit + scaleY(2));
@@ -3390,21 +3707,44 @@ function renderPixelReplicaSvg(snapshot) {
   function resolveRightBranchLabelSpec(item, terminalNodeX, terminalNodeWidth, options = {}) {
     const labelX = safeNumber(options.labelX, terminalNodeX + terminalNodeWidth + rightBranchLabelGapX);
     const baseMaxWidth = Math.max(safeNumber(options.maxWidth, width - labelX - rightLabelPaddingRight), 120);
-    const wrapMaxWidth = Math.min(
-      baseMaxWidth,
-      safeNumber(
-        options.wrapMaxWidth,
-        currentChartLanguage() === "zh"
-          ? safeNumber(snapshot.layout?.rightBranchWrapMaxWidthZh, 136)
-          : safeNumber(snapshot.layout?.rightBranchWrapMaxWidthEn, 196)
-      )
-    );
     const density = options.density || "regular";
     const titleFontSize = safeNumber(options.titleFontSize, safeNumber(snapshot.layout?.sourceTemplateTitleSize, 28));
     const titleLineHeight = safeNumber(
       options.titleLineHeight,
       safeNumber(snapshot.layout?.sourceTemplateTitleLineHeight, Math.max(Math.round(titleFontSize * 1.1), titleFontSize + 2))
     );
+    const localizedTitle = currentChartLanguage() === "zh" ? localizeChartItemName(item) : String(item?.name || "");
+    const configuredWrapMaxWidth = safeNumber(
+      options.wrapMaxWidth,
+      currentChartLanguage() === "zh"
+        ? safeNumber(snapshot.layout?.rightBranchWrapMaxWidthZh, 136)
+        : safeNumber(snapshot.layout?.rightBranchWrapMaxWidthEn, 196)
+    );
+    let wrapMaxWidth = Math.min(baseMaxWidth, configuredWrapMaxWidth);
+    if (currentChartLanguage() === "zh" && localizedTitle && isCjkLabelText(localizedTitle)) {
+      const condensedTitle = localizedTitle.replace(/\s+/g, "");
+      const titleCharCount = [...condensedTitle].filter((char) => !/[()]/.test(char)).length;
+      const shortSingleLineChars = Math.max(
+        1,
+        safeNumber(snapshot.layout?.rightBranchShortCjkSingleLineChars, density === "dense" ? 6 : 7)
+      );
+      const mediumSingleLineChars = Math.max(
+        shortSingleLineChars,
+        safeNumber(snapshot.layout?.rightBranchMediumCjkSingleLineChars, shortSingleLineChars + 1)
+      );
+      const desiredSingleLineWidth =
+        approximateTextWidth(localizedTitle, titleFontSize) +
+        safeNumber(snapshot.layout?.rightBranchShortCjkSingleLinePadX, 12);
+      if (titleCharCount <= shortSingleLineChars) {
+        wrapMaxWidth = Math.min(baseMaxWidth, Math.max(wrapMaxWidth, desiredSingleLineWidth));
+      } else if (
+        titleCharCount <= mediumSingleLineChars &&
+        desiredSingleLineWidth <=
+          baseMaxWidth * clamp(safeNumber(snapshot.layout?.rightBranchMediumCjkSingleLineWidthUtilization, 0.92), 0.72, 1)
+      ) {
+        wrapMaxWidth = Math.min(baseMaxWidth, Math.max(wrapMaxWidth, desiredSingleLineWidth));
+      }
+    }
     const sharedGrowthNoteSize = safeNumber(
       snapshot.layout?.sourceTemplateYoySize,
       safeNumber(snapshot.layout?.sourceTemplateQoqSize, 14)
@@ -3435,6 +3775,14 @@ function renderPixelReplicaSvg(snapshot) {
       noteMaxWidth: wrapMaxWidth,
       fallbackMinHeight: safeNumber(options.fallbackMinHeight, density === "dense" ? 42 : 52),
     });
+    const titleLines =
+      options.maxWidth && !item?.titleLines?.length
+        ? resolveBranchTitleLines(item, options.defaultMode || "negative-parentheses", titleFontSize, wrapMaxWidth)
+        : localizeChartLines(layout.titleLines);
+    const noteLines =
+      options.maxWidth && !item?.noteLines?.length
+        ? resolveTreeNoteLines(item, layout.density, noteFontSize, wrapMaxWidth)
+        : localizeChartLines(layout.noteLines);
     return {
       labelX,
       maxWidth: wrapMaxWidth,
@@ -3444,15 +3792,113 @@ function renderPixelReplicaSvg(snapshot) {
       noteLineHeight,
       noteGap,
       noteOffsetY,
+      blockWidth: Math.max(
+        approximateTextBlockWidth(titleLines, titleFontSize),
+        approximateTextBlockWidth(noteLines, noteFontSize),
+        1
+      ),
       collisionHeight: Math.max(
         safeNumber(options.minCollisionHeight, 0),
         layout.totalHeight + noteOffsetY + safeNumber(options.collisionPaddingY, currentChartLanguage() === "zh" ? 18 : 14)
       ),
     };
   }
+  const sampleXsAcrossRect = (rect, minX, maxX, count = 9) => {
+    if (!rect) return [];
+    const left = clamp(rect.left + 1, minX, maxX);
+    const right = clamp(rect.right - 1, minX, maxX);
+    if (!(right >= left)) return [];
+    if (right <= left + 0.5) return [left];
+    return Array.from({ length: count }, (_unused, index) =>
+      clamp(left + ((right - left) * index) / Math.max(count - 1, 1), minX, maxX)
+    ).filter((value, index, values) => Number.isFinite(value) && (index === 0 || Math.abs(value - values[index - 1]) > 0.5));
+  };
+  const resolveRightBranchLabelCenterY = (labelSpec, preferredCenterY, options = {}) => {
+    if (options.lockLabelCenterY) return preferredCenterY;
+    const flowModel = options.avoidFlowModel;
+    if (!flowModel) return preferredCenterY;
+    const clearanceY = Math.max(scaleY(safeNumber(options.ribbonClearanceY, 10)), 0);
+    const labelPadX = scaleY(safeNumber(options.labelPadX, 8));
+    const minCenterY = safeNumber(options.minLabelCenterY, preferredCenterY - scaleY(safeNumber(options.maxAutoShiftY, 42)));
+    const maxCenterY = safeNumber(options.maxLabelCenterY, preferredCenterY + scaleY(safeNumber(options.maxAutoShiftY, 42)));
+    if (!(maxCenterY >= minCenterY)) return preferredCenterY;
+    const rectForCenterY = (centerY) => ({
+      left: labelSpec.labelX - labelPadX,
+      right: labelSpec.labelX + labelSpec.blockWidth + labelPadX,
+      top: centerY - labelSpec.collisionHeight / 2,
+      bottom: centerY + labelSpec.collisionHeight / 2,
+    });
+    const overlapScore = (centerY) => {
+      const rect = rectForCenterY(centerY);
+      const sampleXs = sampleXsAcrossRect(
+        rect,
+        Math.min(flowModel.x0, flowModel.x1),
+        Math.max(flowModel.x0, flowModel.x1)
+      );
+      let hitCount = 0;
+      let overlapDepth = 0;
+      sampleXs.forEach((sampleX) => {
+        const envelope = flowEnvelopeAtX(
+          sampleX,
+          flowModel.x0,
+          flowModel.sourceTop,
+          flowModel.sourceBottom,
+          flowModel.x1,
+          flowModel.targetTop,
+          flowModel.targetTop + flowModel.targetHeight,
+          flowModel.options
+        );
+        if (!envelope) return;
+        const overlapTop = Math.max(rect.top, envelope.top - clearanceY);
+        const overlapBottom = Math.min(rect.bottom, envelope.bottom + clearanceY);
+        const overlap = overlapBottom - overlapTop;
+        if (overlap > 0) {
+          hitCount += 1;
+          overlapDepth += overlap;
+        }
+      });
+      return {
+        hitCount,
+        overlapDepth,
+        shiftDistance: Math.abs(centerY - preferredCenterY),
+      };
+    };
+    const candidateCenters = [
+      preferredCenterY,
+      preferredCenterY - scaleY(12),
+      preferredCenterY + scaleY(12),
+      preferredCenterY - scaleY(24),
+      preferredCenterY + scaleY(24),
+      preferredCenterY - scaleY(36),
+      preferredCenterY + scaleY(36),
+      minCenterY,
+      maxCenterY,
+    ]
+      .map((value) => clamp(value, minCenterY, maxCenterY))
+      .filter((value, index, values) => values.findIndex((candidate) => Math.abs(candidate - value) < 0.5) === index);
+    let bestCenterY = preferredCenterY;
+    let bestScore = null;
+    candidateCenters.forEach((candidateCenterY) => {
+      const score = overlapScore(candidateCenterY);
+      if (
+        !bestScore ||
+        score.hitCount < bestScore.hitCount ||
+        (score.hitCount === bestScore.hitCount && score.overlapDepth < bestScore.overlapDepth - 0.01) ||
+        (score.hitCount === bestScore.hitCount &&
+          Math.abs(score.overlapDepth - bestScore.overlapDepth) <= 0.01 &&
+          score.shiftDistance < bestScore.shiftDistance)
+      ) {
+        bestCenterY = candidateCenterY;
+        bestScore = score;
+      }
+    });
+    return bestCenterY;
+  };
   const renderRightBranchLabel = (item, box, terminalNodeX, terminalNodeWidth, color, options = {}) =>
     {
       const labelSpec = resolveRightBranchLabelSpec(item, terminalNodeX, terminalNodeWidth, options);
+      const preferredLabelCenterY = safeNumber(options.labelCenterY, box.center);
+      const resolvedLabelCenterY = resolveRightBranchLabelCenterY(labelSpec, preferredLabelCenterY, options);
       return renderTreeLabelBlock(item, box, labelSpec.labelX, color, {
         ...options,
         anchor: "start",
@@ -3464,7 +3910,7 @@ function renderPixelReplicaSvg(snapshot) {
         noteLineHeight: labelSpec.noteLineHeight,
         noteGap: labelSpec.noteGap,
         noteOffsetY: labelSpec.noteOffsetY,
-        labelCenterY: safeNumber(options.labelCenterY, box.center),
+        labelCenterY: resolvedLabelCenterY,
       });
     };
   const renderRightSummaryLabel = (lines, labelX, labelCenterY) => {
@@ -3821,26 +4267,26 @@ function renderPixelReplicaSvg(snapshot) {
     costBreakdownSlices.length <= 2
       ? {
           ...costBreakdownTerminalBranchOptions,
-          curveFactor: costBreakdownEarlySplitMode ? 0.74 : 0.68,
-          startCurveFactor: costBreakdownEarlySplitMode ? 0.18 : 0.09,
-          endCurveFactor: costBreakdownEarlySplitMode ? 0.38 : 0.34,
-          minStartCurveFactor: costBreakdownEarlySplitMode ? 0.12 : 0.05,
-          maxStartCurveFactor: costBreakdownEarlySplitMode ? 0.24 : 0.12,
+          curveFactor: costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 0.84 : 0.74) : 0.68,
+          startCurveFactor: costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 0.28 : 0.18) : 0.09,
+          endCurveFactor: costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 0.46 : 0.38) : 0.34,
+          minStartCurveFactor: costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 0.18 : 0.12) : 0.05,
+          maxStartCurveFactor: costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 0.38 : 0.24) : 0.12,
           minEndCurveFactor: 0.22,
-          maxEndCurveFactor: costBreakdownEarlySplitMode ? 0.4 : 0.36,
-          deltaScale: costBreakdownEarlySplitMode ? 0.78 : 0.88,
-          deltaInfluence: costBreakdownEarlySplitMode ? 0.032 : 0.05,
-          sourceHoldFactor: costBreakdownEarlySplitMode ? 0.034 : 0.1,
-          minSourceHoldLength: costBreakdownEarlySplitMode ? 4 : 28,
-          maxSourceHoldLength: costBreakdownEarlySplitMode ? 16 : 44,
-          targetHoldFactor: costBreakdownEarlySplitMode ? 0.038 : 0.052,
-          minTargetHoldLength: costBreakdownEarlySplitMode ? 4 : 6,
-          maxTargetHoldLength: costBreakdownEarlySplitMode ? 9 : 12,
+          maxEndCurveFactor: costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 0.5 : 0.4) : 0.36,
+          deltaScale: costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 0.72 : 0.78) : 0.88,
+          deltaInfluence: costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 0.042 : 0.032) : 0.05,
+          sourceHoldFactor: costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 0.012 : 0.034) : 0.1,
+          minSourceHoldLength: costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 1 : 4) : 28,
+          maxSourceHoldLength: costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 8 : 16) : 44,
+          targetHoldFactor: costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 0.028 : 0.038) : 0.052,
+          minTargetHoldLength: costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 2 : 4) : 6,
+          maxTargetHoldLength: costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 7 : 9) : 12,
           sourceHoldDeltaReduction: costBreakdownEarlySplitMode ? 0.76 : 0,
           targetHoldDeltaReduction: costBreakdownEarlySplitMode ? 0.68 : 0.52,
           minAdaptiveSourceHoldLength: costBreakdownEarlySplitMode ? 1 : 22,
           minAdaptiveTargetHoldLength: 2,
-          holdDeltaScale: costBreakdownEarlySplitMode ? 0.42 : 0.56,
+          holdDeltaScale: costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 0.36 : 0.42) : 0.56,
         }
       : costBreakdownSlices.length === 3
         ? {
@@ -4927,12 +5373,26 @@ function renderPixelReplicaSvg(snapshot) {
     density,
     labelX = undefined,
     centerWrapped = true,
+    lockLabelCenterY = false,
     branchOptions = standardTerminalBranchOptions,
   }) => {
     const sourceShift = sourceNodeId ? editorOffsetForNode(sourceNodeId) : { dx: 0, dy: 0 };
     const sourceTop = safeNumber(block.bridge?.sourceTop, block.top) + sourceShift.dy;
     const sourceBottom = safeNumber(block.bridge?.sourceBottom, block.bottom) + sourceShift.dy;
     const targetFrame = editableNodeFrame(terminalNodeId, terminalNodeX, targetTop, terminalNodeWidth, targetHeight);
+    const sourceCoverInset = Math.max(
+      safeNumber(branchOptions.sourceCoverInsetX, safeNumber(snapshot.layout?.branchSourceCoverInsetX, 1.5)),
+      0
+    );
+    const avoidFlowModel = {
+      x0: sourceX + sourceShift.dx - sourceCoverInset,
+      x1: targetFrame.x + safeNumber(branchOptions.targetCoverInsetX, safeNumber(snapshot.layout?.branchTargetCoverInsetX, 14)),
+      sourceTop,
+      sourceBottom,
+      targetTop: targetFrame.y,
+      targetHeight,
+      options: mergeOutflowRibbonOptions(branchOptions),
+    };
     let html = renderTerminalCapRibbon({
       sourceX: sourceX + sourceShift.dx,
       sourceTop,
@@ -4951,7 +5411,9 @@ function renderPixelReplicaSvg(snapshot) {
       defaultMode: "negative-parentheses",
       labelX,
       centerWrapped,
+      lockLabelCenterY,
       labelCenterY: targetFrame.centerY,
+      avoidFlowModel,
     });
     return html;
   };
@@ -4981,6 +5443,8 @@ function renderPixelReplicaSvg(snapshot) {
       flowColor: fillColor,
       labelColor: redText,
       density: opexDensity,
+      labelX: negativeTerminalLabelX,
+      lockLabelCenterY: true,
       branchOptions,
     });
   };
@@ -4999,6 +5463,7 @@ function renderPixelReplicaSvg(snapshot) {
       density: costBreakdownSlices.length >= 3 ? "dense" : "regular",
       labelX: costBreakdownLabelSafeX,
       centerWrapped: false,
+      lockLabelCenterY: true,
       branchOptions: resolvedCostBreakdownTerminalBranchOptions,
     });
   };
@@ -5026,7 +5491,16 @@ function renderPixelReplicaSvg(snapshot) {
     let upperFrame = editableNodeFrame("cost-breakdown-0", costBreakdownX, upperBlock.bridge.targetTop, nodeWidth, upperBlock.bridge.targetHeight);
     let lowerFrame = editableNodeFrame("cost-breakdown-1", costBreakdownX, lowerBlock.bridge.targetTop, nodeWidth, lowerBlock.bridge.targetHeight);
     const desiredRenderGapY = scaleY(
-      safeNumber(snapshot.layout?.costBreakdownRenderGapY, costBreakdownSharesOpexColumn ? 14 : 10)
+      safeNumber(
+        snapshot.layout?.costBreakdownRenderGapY,
+        costBreakdownExpandedFanout
+          ? costBreakdownSharesOpexColumn
+            ? 36
+            : 24
+          : costBreakdownSharesOpexColumn
+            ? 14
+            : 10
+      )
     );
     const currentRenderGapY = lowerFrame.y - (upperFrame.y + upperFrame.height);
     if (currentRenderGapY < desiredRenderGapY) {
@@ -5080,38 +5554,44 @@ function renderPixelReplicaSvg(snapshot) {
         sharedTrunkAvailableX *
           safeNumber(
             snapshot.layout?.costBreakdownSharedTrunkFactor,
-            costBreakdownEarlySplitMode ? 0.1 : 0.2
+            costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 0.05 : 0.1) : 0.2
           )
       ),
-      safeNumber(snapshot.layout?.costBreakdownMinSharedTrunkLength, costBreakdownEarlySplitMode ? 8 : 18),
-      Math.max(Math.min(sharedTrunkAvailableX, safeNumber(snapshot.layout?.costBreakdownMaxSharedTrunkLength, costBreakdownEarlySplitMode ? 18 : 30)), 8)
+      safeNumber(snapshot.layout?.costBreakdownMinSharedTrunkLength, costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 4 : 8) : 18),
+      Math.max(
+        Math.min(
+          sharedTrunkAvailableX,
+          safeNumber(snapshot.layout?.costBreakdownMaxSharedTrunkLength, costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 10 : 18) : 30)
+        ),
+        8
+      )
     );
     const splitX = sourcePathX + sharedTrunkLength;
     const splitOuterBranchOptions = resolveSplitBranchBoundaryOptions(resolvedBranchOptions, {
       targetHoldFactor: safeNumber(snapshot.layout?.costBreakdownSplitOuterTargetHoldFactor, costBreakdownEarlySplitMode ? 0.03 : 0.05),
       minTargetHoldLength: safeNumber(snapshot.layout?.costBreakdownSplitOuterMinTargetHoldLength, costBreakdownEarlySplitMode ? 3 : 6),
       maxTargetHoldLength: safeNumber(snapshot.layout?.costBreakdownSplitOuterMaxTargetHoldLength, costBreakdownEarlySplitMode ? 8 : 12),
-      startCurveFactor: safeNumber(snapshot.layout?.costBreakdownSplitOuterStartCurveFactor, costBreakdownEarlySplitMode ? 0.22 : 0.12),
-      endCurveFactor: safeNumber(snapshot.layout?.costBreakdownSplitOuterEndCurveFactor, costBreakdownEarlySplitMode ? 0.38 : 0.3),
-      minStartCurveFactor: safeNumber(snapshot.layout?.costBreakdownSplitOuterMinStartCurveFactor, costBreakdownEarlySplitMode ? 0.14 : 0.08),
-      maxStartCurveFactor: safeNumber(snapshot.layout?.costBreakdownSplitOuterMaxStartCurveFactor, costBreakdownEarlySplitMode ? 0.28 : 0.18),
+      startCurveFactor: safeNumber(snapshot.layout?.costBreakdownSplitOuterStartCurveFactor, costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 0.36 : 0.22) : 0.12),
+      endCurveFactor: safeNumber(snapshot.layout?.costBreakdownSplitOuterEndCurveFactor, costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 0.5 : 0.38) : 0.3),
+      minStartCurveFactor: safeNumber(snapshot.layout?.costBreakdownSplitOuterMinStartCurveFactor, costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 0.22 : 0.14) : 0.08),
+      maxStartCurveFactor: safeNumber(snapshot.layout?.costBreakdownSplitOuterMaxStartCurveFactor, costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 0.46 : 0.28) : 0.18),
       minEndCurveFactor: safeNumber(snapshot.layout?.costBreakdownSplitOuterMinEndCurveFactor, 0.18),
-      maxEndCurveFactor: safeNumber(snapshot.layout?.costBreakdownSplitOuterMaxEndCurveFactor, costBreakdownEarlySplitMode ? 0.42 : 0.36),
+      maxEndCurveFactor: safeNumber(snapshot.layout?.costBreakdownSplitOuterMaxEndCurveFactor, costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 0.56 : 0.42) : 0.36),
       deltaScale: safeNumber(snapshot.layout?.costBreakdownSplitOuterDeltaScale, 0.92),
-      deltaInfluence: safeNumber(snapshot.layout?.costBreakdownSplitOuterDeltaInfluence, costBreakdownEarlySplitMode ? 0.024 : 0.036),
+      deltaInfluence: safeNumber(snapshot.layout?.costBreakdownSplitOuterDeltaInfluence, costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 0.034 : 0.024) : 0.036),
     });
     const splitInnerBranchOptions = resolveSplitBranchBoundaryOptions(resolvedBranchOptions, {
       targetHoldFactor: safeNumber(snapshot.layout?.costBreakdownSplitInnerTargetHoldFactor, costBreakdownEarlySplitMode ? 0.028 : 0.046),
       minTargetHoldLength: safeNumber(snapshot.layout?.costBreakdownSplitInnerMinTargetHoldLength, costBreakdownEarlySplitMode ? 2 : 4),
       maxTargetHoldLength: safeNumber(snapshot.layout?.costBreakdownSplitInnerMaxTargetHoldLength, costBreakdownEarlySplitMode ? 7 : 10),
-      startCurveFactor: safeNumber(snapshot.layout?.costBreakdownSplitInnerStartCurveFactor, costBreakdownEarlySplitMode ? 0.24 : 0.14),
-      endCurveFactor: safeNumber(snapshot.layout?.costBreakdownSplitInnerEndCurveFactor, costBreakdownEarlySplitMode ? 0.34 : 0.28),
-      minStartCurveFactor: safeNumber(snapshot.layout?.costBreakdownSplitInnerMinStartCurveFactor, costBreakdownEarlySplitMode ? 0.16 : 0.1),
-      maxStartCurveFactor: safeNumber(snapshot.layout?.costBreakdownSplitInnerMaxStartCurveFactor, costBreakdownEarlySplitMode ? 0.3 : 0.2),
+      startCurveFactor: safeNumber(snapshot.layout?.costBreakdownSplitInnerStartCurveFactor, costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 0.4 : 0.24) : 0.14),
+      endCurveFactor: safeNumber(snapshot.layout?.costBreakdownSplitInnerEndCurveFactor, costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 0.44 : 0.34) : 0.28),
+      minStartCurveFactor: safeNumber(snapshot.layout?.costBreakdownSplitInnerMinStartCurveFactor, costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 0.24 : 0.16) : 0.1),
+      maxStartCurveFactor: safeNumber(snapshot.layout?.costBreakdownSplitInnerMaxStartCurveFactor, costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 0.5 : 0.3) : 0.2),
       minEndCurveFactor: safeNumber(snapshot.layout?.costBreakdownSplitInnerMinEndCurveFactor, 0.18),
-      maxEndCurveFactor: safeNumber(snapshot.layout?.costBreakdownSplitInnerMaxEndCurveFactor, costBreakdownEarlySplitMode ? 0.38 : 0.34),
+      maxEndCurveFactor: safeNumber(snapshot.layout?.costBreakdownSplitInnerMaxEndCurveFactor, costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 0.48 : 0.38) : 0.34),
       deltaScale: safeNumber(snapshot.layout?.costBreakdownSplitInnerDeltaScale, 0.9),
-      deltaInfluence: safeNumber(snapshot.layout?.costBreakdownSplitInnerDeltaInfluence, costBreakdownEarlySplitMode ? 0.02 : 0.03),
+      deltaInfluence: safeNumber(snapshot.layout?.costBreakdownSplitInnerDeltaInfluence, costBreakdownEarlySplitMode ? (costBreakdownExpandedFanout ? 0.03 : 0.02) : 0.03),
     });
     const mirroredSplitOuterBranchOptions = mirrorFlowBoundaryOptions(splitOuterBranchOptions);
     const mirroredSplitInnerBranchOptions = mirrorFlowBoundaryOptions(splitInnerBranchOptions);
@@ -5154,6 +5634,7 @@ function renderPixelReplicaSvg(snapshot) {
       defaultMode: "negative-parentheses",
       labelX: costBreakdownLabelSafeX,
       centerWrapped: false,
+      lockLabelCenterY: true,
       labelCenterY: upperFrame.centerY,
     });
     html += renderRightBranchLabel(lowerBlock.item, lowerBlock.box, lowerFrame.x, nodeWidth, redText, {
@@ -5161,6 +5642,7 @@ function renderPixelReplicaSvg(snapshot) {
       defaultMode: "negative-parentheses",
       labelX: costBreakdownLabelSafeX,
       centerWrapped: false,
+      lockLabelCenterY: true,
       labelCenterY: lowerFrame.centerY,
     });
     return html;
@@ -5711,6 +6193,112 @@ function renderPixelReplicaSvg(snapshot) {
       }
     }
   }
+  const refineCostStageElbowBalance = () => {
+    if (!(showCostBridge && costBreakdownBoxes.length)) return;
+    const leadCostBreakdownEntry = costBreakdownBoxes
+      .map((box, index) => ({
+        box,
+        index,
+        sourceSlice: costBreakdownSourceSlices[index] || costBreakdownSlices[index] || null,
+      }))
+      .filter((entry) => entry.box && entry.sourceSlice)
+      .sort(
+        (left, right) =>
+          safeNumber(left.sourceSlice?.top, Infinity) - safeNumber(right.sourceSlice?.top, Infinity) || left.index - right.index
+      )[0];
+    if (!leadCostBreakdownEntry) return;
+    const costShift = layoutReferenceOffsetFor("cost");
+    const grossShift = layoutReferenceOffsetFor("gross");
+    const targetShift = layoutReferenceOffsetFor(`cost-breakdown-${leadCostBreakdownEntry.index}`);
+    const leadSourceHeight = Math.max(
+      safeNumber(leadCostBreakdownEntry.sourceSlice?.height, 0),
+      safeNumber(leadCostBreakdownEntry.box?.height, 0),
+      1
+    );
+    const leadBridge = constantThicknessBridge(
+      leadCostBreakdownEntry.sourceSlice,
+      safeNumber(leadCostBreakdownEntry.box?.center, safeNumber(leadCostBreakdownEntry.sourceSlice?.center, 0)),
+      10,
+      costTop,
+      costBottom
+    );
+    const leadTargetTopY = safeNumber(leadBridge?.targetTop, safeNumber(leadCostBreakdownEntry.box?.top, 0)) + targetShift.dy;
+    const leadDropHeightRatio = clamp(
+      safeNumber(
+        snapshot.layout?.costStageLeadBreakdownDropHeightRatio,
+        costBreakdownBoxes.length >= 5
+          ? 0.26
+          : costBreakdownBoxes.length === 4
+            ? 0.24
+            : costBreakdownBoxes.length === 3
+              ? 0.22
+              : 0.18
+      ),
+      0.1,
+      0.42
+    );
+    const currentLeadTopDropY =
+      leadTargetTopY -
+      (safeNumber(leadCostBreakdownEntry.sourceSlice?.top, 0) + costShift.dy);
+    const desiredLeadTopDropY = clamp(
+      Math.max(
+        scaleY(
+          safeNumber(
+            snapshot.layout?.costStageLeadBreakdownMinTopDropY,
+            costBreakdownBoxes.length >= 5
+              ? 64
+              : costBreakdownBoxes.length === 4
+                ? 56
+                : costBreakdownBoxes.length === 3
+                  ? 48
+                  : costBreakdownBoxes.length === 2
+                    ? 40
+                    : 30
+          )
+        ),
+        leadSourceHeight * leadDropHeightRatio
+      ) +
+        lowerRightPressureY *
+          safeNumber(
+            snapshot.layout?.costStageLeadBreakdownDropPressureFactor,
+            costBreakdownBoxes.length >= 4 ? 0.14 : 0.1
+          ),
+      scaleY(24),
+      Math.max(
+        scaleY(safeNumber(snapshot.layout?.costStageLeadBreakdownMaxTopDropY, costBreakdownBoxes.length >= 4 ? 92 : 74)),
+        leadSourceHeight * safeNumber(snapshot.layout?.costStageLeadBreakdownMaxHeightRatio, 0.42)
+      )
+    );
+    const requestedLiftY = Math.max(desiredLeadTopDropY - currentLeadTopDropY, 0);
+    const currentVisibleCostGapY =
+      costTop + costShift.dy - (grossBottom + grossShift.dy);
+    const retainedGapFactor = clamp(
+      safeNumber(snapshot.layout?.costStageLiftRetainedGapFactor, costBreakdownBoxes.length >= 3 ? 0.62 : 0.72),
+      0.35,
+      1
+    );
+    const retainedCostGapY = Math.max(
+      costMinGapFromGross,
+      desiredCostGapFromGrossY * retainedGapFactor,
+      scaleY(safeNumber(snapshot.layout?.costStageLiftGuardGapY, costBreakdownBoxes.length >= 3 ? 26 : 22))
+    );
+    const availableLiftY = Math.max(currentVisibleCostGapY - retainedCostGapY, 0);
+    const appliedLiftY = Math.min(
+      requestedLiftY,
+      availableLiftY,
+      scaleY(
+        safeNumber(
+          snapshot.layout?.costStageElbowLiftMaxY,
+          costBreakdownBoxes.length >= 5 ? 34 : costBreakdownBoxes.length >= 3 ? 28 : 22
+        )
+      )
+    );
+    if (!(requestedLiftY > 0.5)) return;
+    if (!(appliedLiftY > 0.5)) return;
+    const currentAutoCostShiftY = autoLayoutOffsetForNode("cost").dy;
+    setAutoLayoutNodeOffset("cost", { dy: currentAutoCostShiftY - appliedLiftY });
+  };
+  refineCostStageElbowBalance();
   refreshEditableNodeFrames();
   const revenueGrossBand = shiftedInterval(revenueGrossSourceBand.top, revenueGrossSourceBand.bottom, "revenue");
   const revenueCostBand = revenueCostSourceBand ? shiftedInterval(revenueCostSourceBand.top, revenueCostSourceBand.bottom, "revenue") : null;
@@ -5862,7 +6450,7 @@ function renderPixelReplicaSvg(snapshot) {
         operatingFrame.centerX,
         operatingMetricYShifted,
         localizeChartPhrase(snapshot.operatingProfitLabel || "Operating profit"),
-        formatBillions(operatingProfitBn),
+        formatBillions(rawOperatingProfitBn),
         snapshot.operatingMarginPct !== null && snapshot.operatingMarginPct !== undefined ? `${formatPct(snapshot.operatingMarginPct)} ${marginLabel()}` : "",
         snapshot.operatingMarginYoyDeltaPp !== null && snapshot.operatingMarginYoyDeltaPp !== undefined ? formatPp(snapshot.operatingMarginYoyDeltaPp) : "",
         greenText,
@@ -6000,7 +6588,7 @@ function renderPixelReplicaSvg(snapshot) {
       operatingFrame.centerX,
       operatingMetricYShifted,
       snapshot.operatingProfitLabel || "Operating profit",
-      formatBillions(operatingProfitBn),
+      formatBillions(rawOperatingProfitBn),
       snapshot.operatingMarginPct !== null && snapshot.operatingMarginPct !== undefined ? `${formatPct(snapshot.operatingMarginPct)} ${marginLabel()}` : "",
       snapshot.operatingMarginYoyDeltaPp !== null && snapshot.operatingMarginYoyDeltaPp !== undefined ? formatPp(snapshot.operatingMarginYoyDeltaPp) : "",
       operatingMetricLayout,
@@ -7300,7 +7888,18 @@ function renderPixelReplicaSvg(snapshot) {
     svg += renderRightBranchLabel(slice.item, box, deductionFrame.x, nodeWidth, redText, {
       density: deductionSlices.length >= 3 ? "dense" : "regular",
       defaultMode: "negative-parentheses",
+      labelX: negativeTerminalLabelX,
+      lockLabelCenterY: true,
       labelCenterY: deductionFrame.centerY,
+      avoidFlowModel: {
+        x0: operatingFrame.right - Math.max(safeNumber(deductionBranchOptions.sourceCoverInsetX, safeNumber(snapshot.layout?.branchSourceCoverInsetX, 1.5)), 0),
+        x1: deductionFrame.x + safeNumber(deductionBranchOptions.targetCoverInsetX, safeNumber(snapshot.layout?.branchTargetCoverInsetX, 14)),
+        sourceTop: bridge.sourceTop + operatingShift.dy,
+        sourceBottom: bridge.sourceBottom + operatingShift.dy,
+        targetTop: deductionFrame.y,
+        targetHeight: deductionFrame.height,
+        options: mergeOutflowRibbonOptions(deductionBranchOptions),
+      },
     });
   });
   const costBreakdownBlocks = costBreakdownSlices.map((slice, index) => {
@@ -7351,4 +7950,3 @@ function renderPixelReplicaSvg(snapshot) {
   svg += `</g></svg>`;
   return svg;
 }
-

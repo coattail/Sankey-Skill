@@ -99,14 +99,6 @@ BAR_SEGMENT_CANONICAL_BY_COMPANY: dict[str, dict[str, str]] = {
         "foodsundries": "foodssundries",
         "freshfood": "freshfoods",
     },
-    "amd": {
-        "clientandgaming": "clientgaming",
-        "clientgaming": "clientgaming",
-        "datacenter": "datacenter",
-        "computinggraphics": "computingandgraphics",
-        "enterpriseembeddedsemicustom": "enterpriseembeddedsemicustom",
-        "enterpriseembeddedandsemicustom": "enterpriseembeddedsemicustom",
-    },
 }
 
 MICRON_LEGACY_SEGMENT_KEYS = {"cnbu", "mbu", "sbu", "ebu", "allothersegments"}

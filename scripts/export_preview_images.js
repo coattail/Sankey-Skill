@@ -219,7 +219,6 @@ async function exportCharts(args) {
         width: item.width,
         height: item.height,
         status: item.status,
-        coverageDiagnostics: item.coverageDiagnostics || null,
       };
     });
 

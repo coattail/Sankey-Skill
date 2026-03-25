@@ -33,79 +33,9 @@ function normalizeBreakdownItems(items = [], fallbackSourceUrl = null, defaultMo
     .filter((item) => safeNumber(item.valueBn) > 0.02);
 }
 
-function reconcileBreakdownItemsToTarget(items, totalValueBn, options = {}) {
-  const normalizedItems = normalizeBreakdownItems(items, options.fallbackSourceUrl || null, options.defaultMode || "negative-parentheses");
-  if (!normalizedItems.length) return [];
-  if (totalValueBn === null || totalValueBn === undefined || totalValueBn === "") {
-    return normalizedItems;
-  }
-  const targetTotalBn = Math.max(safeNumber(totalValueBn), 0);
-  if (targetTotalBn <= 0.05) return [];
-  const tolerance = Math.max(
-    safeNumber(options.baseTolerance, 0.08),
-    targetTotalBn * safeNumber(options.relativeToleranceFactor, 0.01)
-  );
-  const rawSumBn = normalizedItems.reduce((sum, item) => sum + Math.max(safeNumber(item?.valueBn), 0), 0);
-  const rawFitsTarget =
-    normalizedItems.every((item) => Math.max(safeNumber(item?.valueBn), 0) <= targetTotalBn + tolerance) &&
-    rawSumBn <= targetTotalBn + tolerance;
-  if (rawFitsTarget) {
-    const itemsWithResidual = normalizedItems.map((item) => ({
-      ...item,
-      valueBn: Number(Math.max(safeNumber(item?.valueBn), 0).toFixed(3)),
-    }));
-    const residualBn = targetTotalBn - rawSumBn;
-    if (residualBn > tolerance) {
-      itemsWithResidual.push({
-        name: options.residualName || "Residual",
-        nameZh: options.residualNameZh || "其他",
-        valueBn: Number(residualBn.toFixed(3)),
-        valueFormat: options.defaultMode || "negative-parentheses",
-        sourceUrl: options.fallbackSourceUrl || normalizedItems[0]?.sourceUrl || null,
-      });
-    }
-    return itemsWithResidual.filter((item) => safeNumber(item?.valueBn) > 0.02);
-  }
-  if (normalizedItems.length === 1) {
-    return [
-      {
-        ...normalizedItems[0],
-        valueBn: Number(Math.min(Math.max(safeNumber(normalizedItems[0]?.valueBn), 0), targetTotalBn).toFixed(3)),
-      },
-    ].filter((item) => safeNumber(item?.valueBn) > 0.02);
-  }
-  if (rawSumBn <= 0.0001) return [];
-  const scaleFactor = targetTotalBn / rawSumBn;
-  const scaledItems = normalizedItems.map((item, index) => {
-    const scaledValueBn =
-      index === normalizedItems.length - 1
-        ? Math.max(
-            targetTotalBn -
-              normalizedItems
-                .slice(0, index)
-                .reduce((sum, priorItem) => sum + Number((Math.max(safeNumber(priorItem?.valueBn), 0) * scaleFactor).toFixed(3)), 0),
-            0
-          )
-        : Number((Math.max(safeNumber(item?.valueBn), 0) * scaleFactor).toFixed(3));
-    return {
-      ...item,
-      valueBn: Number(scaledValueBn.toFixed(3)),
-    };
-  });
-  return scaledItems.filter((item) => safeNumber(item?.valueBn) > 0.02);
-}
-
 function resolveDirectCostBreakdown(snapshot, company, entry) {
   if (snapshot?.costBreakdown?.length) {
-    const targetCostBn =
-      snapshot?.costOfRevenueBn !== null && snapshot?.costOfRevenueBn !== undefined
-        ? safeNumber(snapshot.costOfRevenueBn)
-        : entry?.costOfRevenueBn;
-    return reconcileBreakdownItemsToTarget(snapshot.costBreakdown, targetCostBn, {
-      fallbackSourceUrl: snapshot?.sourceUrl || null,
-      residualName: "Residual cost",
-      residualNameZh: "其他成本",
-    });
+    return normalizeBreakdownItems(snapshot.costBreakdown);
   }
   const supplemental = supplementalComponentsFor(company, snapshot?.quarterKey || entry?.quarterKey);
   const entrySupplemental = entry?.supplementalComponents || {};
@@ -116,15 +46,7 @@ function resolveDirectCostBreakdown(snapshot, company, entry) {
     entrySupplemental?.costBreakdown ||
     supplemental?.officialCostBreakdown ||
     supplemental?.costBreakdown;
-  const targetCostBn =
-    snapshot?.costOfRevenueBn !== null && snapshot?.costOfRevenueBn !== undefined
-      ? safeNumber(snapshot.costOfRevenueBn)
-      : entry?.costOfRevenueBn;
-  return reconcileBreakdownItemsToTarget(breakdown, targetCostBn, {
-    fallbackSourceUrl: supplemental?.sourceUrl || null,
-    residualName: "Residual cost",
-    residualNameZh: "其他成本",
-  });
+  return normalizeBreakdownItems(breakdown, supplemental?.sourceUrl || null);
 }
 
 function resolveProfileCostBreakdown(snapshot, company, entry) {
@@ -2595,45 +2517,13 @@ function resolveAnchoredBandBoxes(entries, minY, maxY, options = {}) {
   return resolved.sort((left, right) => left.originalIndex - right.originalIndex);
 }
 
-function logoAssetShouldRenderAsImage(asset) {
-  if (!asset?.dataUrl) return false;
-  const sourceUrl = String(asset?.sourceUrl || "").trim().toLowerCase();
-  const sourceKind = String(asset?.sourceKind || "").trim().toLowerCase();
-  const mime = String(asset?.mime || "").trim().toLowerCase();
-  const qualityScore = safeNumber(asset?.qualityScore, null);
-  const width = safeNumber(asset?.width, 0);
-  const height = safeNumber(asset?.height, 0);
-  const normalizationMeta = isPlainObject(asset?.normalizationMeta) ? asset.normalizationMeta : {};
-  if (sourceUrl.startsWith("manual://")) return false;
-  if (sourceKind === "conventional-fallback") return false;
-  if (/svg/.test(mime)) return true;
-  if (qualityScore !== null && qualityScore < 108) return false;
-  if (Math.max(width, height) < 96) return false;
-  if (normalizationMeta.opaqueFrameLikely && !normalizationMeta.backgroundRemoved) return false;
-  return true;
-}
-
-function renderFallbackWordmarkLogo(company, x, y, scale = 1) {
-  const ticker = escapeHtml(String(company?.ticker || "?").slice(0, 8).toUpperCase());
-  const primary = company?.brand?.primary || "#0F172A";
-  const accent = company?.brand?.accent || rgba(primary, 0.1);
-  const secondary = company?.brand?.secondary || "#111827";
-  return `
-    <g transform="translate(${x}, ${y}) scale(${scale})">
-      <rect x="0" y="0" width="188" height="64" rx="18" fill="#FFFFFF" stroke="${rgba(primary, 0.18)}" stroke-width="2"></rect>
-      <rect x="10" y="10" width="168" height="44" rx="14" fill="${accent}"></rect>
-      <text x="94" y="43" text-anchor="middle" font-family="Aptos, Segoe UI, Arial, Helvetica, sans-serif" font-size="34" font-weight="800" letter-spacing="-0.8" fill="${secondary}">${ticker}</text>
-    </g>
-  `;
-}
-
 function logoFrameMetrics(logoKey, context = "corporate") {
   const asset = getLogoAsset(logoKey);
   const normalizedKey = normalizeLogoKey(logoKey);
-  if (!asset || !logoAssetShouldRenderAsImage(asset)) {
+  if (!asset) {
     return context === "corporate"
-      ? { width: 188, height: 64, padding: 0, radius: 18, showPlate: false }
-      : { width: 132, height: 54, padding: 0, radius: 14, showPlate: false };
+      ? { width: 116, height: 116, padding: 14, radius: 30 }
+      : { width: 84, height: 84, padding: 10, radius: 22 };
   }
   const ratio = safeNumber(asset.width, 64) / Math.max(safeNumber(asset.height, 64), 1);
   if (context === "corporate") {
@@ -2715,7 +2605,7 @@ function renderCorporateLogo(logoKey, x, y, options = {}) {
     `;
   }
   const asset = getLogoAsset(logoKey);
-  if (asset && logoAssetShouldRenderAsImage(asset)) {
+  if (asset) {
     const company = getCompany(normalizeLogoKey(logoKey));
     const primary = company?.brand?.primary || "#CBD5E1";
     const metrics = logoFrameMetrics(logoKey, "corporate");
@@ -2733,7 +2623,17 @@ function renderCorporateLogo(logoKey, x, y, options = {}) {
     });
   }
   const company = getCompany(logoKey);
-  return renderFallbackWordmarkLogo(company, x, y, effectiveScale);
+  const initial = escapeHtml((company?.ticker || logoKey || "?").slice(0, 1).toUpperCase());
+  const primary = company?.brand?.primary || "#0F172A";
+  const secondary = company?.brand?.secondary || company?.brand?.accent || primary;
+  return `
+    <g transform="translate(${x}, ${y}) scale(${effectiveScale})">
+      <circle cx="58" cy="58" r="54" fill="#FFFFFF" opacity="0.98"></circle>
+      <circle cx="58" cy="58" r="50" fill="${rgba(primary, 0.08)}" stroke="${rgba(primary, 0.18)}" stroke-width="4"></circle>
+      <circle cx="58" cy="58" r="24" fill="${rgba(secondary, 0.16)}"></circle>
+      <text x="58" y="74" text-anchor="middle" font-size="52" font-weight="800" fill="${primary}">${initial}</text>
+    </g>
+  `;
 }
 
 function currentEditorSessionKey() {

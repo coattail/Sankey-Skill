@@ -870,20 +870,10 @@ function updateMeta(snapshot, company, viewPayload = null) {
 
   if (isBarMode) {
     const history = viewPayload?.history || null;
-    const coverageDiagnostics = history?.coverageDiagnostics || null;
     const quarterCount = history?.quarters?.length || 0;
-    const effectiveQuarterCount = coverageDiagnostics?.targetWindowCount || quarterCount || 0;
-    const requestedQuarterCount = coverageDiagnostics?.requestedWindowCount || history?.requestedQuarterCount || effectiveQuarterCount || 30;
+    const requestedQuarterCount = history?.requestedQuarterCount || quarterCount || 30;
     const windowUnitLabel = history?.windowUnitLabel || "quarters";
     const windowUnitLabelZh = history?.windowUnitLabelZh || "个季度";
-    const windowRestrictionMode = coverageDiagnostics?.windowRestrictionMode || "requested-window";
-    const isComparableWindowRestriction = windowRestrictionMode === "recent-comparable-taxonomy";
-    const windowSummaryEn = isComparableWindowRestriction
-      ? `${effectiveQuarterCount} comparable ${windowUnitLabel} (requested ${requestedQuarterCount})`
-      : `${quarterCount}/${requestedQuarterCount} ${windowUnitLabel}`;
-    const windowSummaryZh = isComparableWindowRestriction
-      ? `${effectiveQuarterCount}${windowUnitLabelZh}可比窗口（请求 ${requestedQuarterCount}${windowUnitLabelZh}）`
-      : `${quarterCount}/${requestedQuarterCount} ${windowUnitLabelZh}`;
     const convertedQuarterCount = history?.convertedQuarterCount || 0;
     const primaryDisplayCurrency = history?.primaryDisplayCurrency || "USD";
     const sourceCurrencySet = Array.isArray(history?.sourceCurrencySet) ? history.sourceCurrencySet : [];
@@ -904,17 +894,13 @@ function updateMeta(snapshot, company, viewPayload = null) {
         : `${company.nameZh || company.nameEn} 分部营收趋势`;
     refs.chartMeta.textContent =
       currentChartLanguage() === "en"
-        ? `${companyDisplay(company)} · ${windowSummaryEn} · Stacked segment bars`
-        : `${companyDisplay(company)} · ${windowSummaryZh} · 分部堆叠柱状图`;
+        ? `${companyDisplay(company)} · ${quarterCount}/${requestedQuarterCount} ${windowUnitLabel} · Stacked segment bars`
+        : `${companyDisplay(company)} · ${quarterCount}/${requestedQuarterCount} ${windowUnitLabelZh} · 分部堆叠柱状图`;
     refs.detailSegmentCount.textContent = currentChartLanguage() === "en" ? `${segmentCount} segments` : `${segmentCount} 个`;
     refs.detailSegmentNote.textContent =
       currentChartLanguage() === "en"
-        ? isComparableWindowRestriction
-          ? `Each bar shows quarterly revenue split by segment; the window is auto-limited to the latest comparable taxonomy regime.`
-          : `Each bar shows quarterly revenue split by segment; categories follow each filing period's official taxonomy.`
-        : isComparableWindowRestriction
-          ? `每个柱子代表一个季度，并按分部营收堆叠；当前窗口已自动收敛到最近可比口径。`
-          : `每个柱子代表一个季度，并按分部营收堆叠；分类严格遵循各期官方披露口径。`;
+        ? `Each bar shows quarterly revenue split by segment; categories follow each filing period's official taxonomy.`
+        : `每个柱子代表一个季度，并按分部营收堆叠；分类严格遵循各期官方披露口径。`;
     refs.detailStatementSummary.textContent = `${formatBillionsInCurrency(earliestRevenue, primaryDisplayCurrency)} → ${formatBillionsInCurrency(
       latestRevenue,
       primaryDisplayCurrency
@@ -922,33 +908,17 @@ function updateMeta(snapshot, company, viewPayload = null) {
     refs.detailStatementNote.textContent =
       growthPct !== null && Number.isFinite(growthPct)
         ? currentChartLanguage() === "en"
-          ? `Window growth: ${formatPct(growthPct, true)} · ${coverageDiagnostics?.summaryEn || `${requestedQuarterCount}-${windowUnitLabel === "quarters" ? "quarter" : "period"} continuity verified`}`
-          : `窗口营收增长：${formatPct(growthPct, true)} · ${coverageDiagnostics?.summaryZh || `${requestedQuarterCount}${windowUnitLabelZh}连续性已校验`}`
+          ? `Window growth: ${formatPct(growthPct, true)} · ${requestedQuarterCount}-${windowUnitLabel === "quarters" ? "quarter" : "period"} continuity verified`
+          : `窗口营收增长：${formatPct(growthPct, true)} · ${requestedQuarterCount}${windowUnitLabelZh}连续性已校验`
         : currentChartLanguage() === "en"
-          ? coverageDiagnostics?.summaryEn || `${requestedQuarterCount}-${windowUnitLabel === "quarters" ? "quarter" : "period"} continuity verified`
-          : coverageDiagnostics?.summaryZh || `${requestedQuarterCount}${windowUnitLabelZh}连续性已校验`;
+          ? `${requestedQuarterCount}-${windowUnitLabel === "quarters" ? "quarter" : "period"} continuity verified`
+          : `${requestedQuarterCount}${windowUnitLabelZh}连续性已校验`;
     refs.detailSourceTitle.textContent =
       currentChartLanguage() === "en" ? "Official segments + currency normalization" : "官方分部 + 币种归一";
-    const coverageTailEn =
-      coverageDiagnostics && !coverageDiagnostics.hasFullTargetWindow && !isComparableWindowRestriction
-        ? ` Missing quarters: ${(coverageDiagnostics.missingQuarterKeys || []).slice(0, 6).join(", ")}${(coverageDiagnostics.missingQuarterKeys || []).length > 6 ? "..." : ""}.`
-        : "";
-    const coverageTailZh =
-      coverageDiagnostics && !coverageDiagnostics.hasFullTargetWindow && !isComparableWindowRestriction
-        ? ` 缺口季度：${(coverageDiagnostics.missingQuarterKeys || []).slice(0, 6).join("、")}${(coverageDiagnostics.missingQuarterKeys || []).length > 6 ? "等" : ""}。`
-        : "";
-    const restrictionTailEn =
-      isComparableWindowRestriction && coverageDiagnostics?.windowRestriction?.summaryEn
-        ? ` ${coverageDiagnostics.windowRestriction.summaryEn}`
-        : "";
-    const restrictionTailZh =
-      isComparableWindowRestriction && coverageDiagnostics?.windowRestriction?.summaryZh
-        ? ` ${coverageDiagnostics.windowRestriction.summaryZh}`
-        : "";
     refs.detailSourceNote.textContent =
       currentChartLanguage() === "en"
-        ? `Currency: ${currencySummary}${convertedQuarterCount ? ` (converted ${convertedQuarterCount}/${quarterCount} quarters from ${sourceCurrencySet.join("/") || "local currencies"})` : ""}. Historical bars are taxonomy-harmonized by period.${restrictionTailEn}${coverageTailEn}`
-        : `币种：${currencySummary}${convertedQuarterCount ? `（${convertedQuarterCount}/${quarterCount} 个季度由 ${sourceCurrencySet.join("/") || "本币"} 折算）` : ""}。历史季度按分期口径进行分类对齐。${restrictionTailZh}${coverageTailZh}`;
+        ? `Currency: ${currencySummary}${convertedQuarterCount ? ` (converted ${convertedQuarterCount}/${quarterCount} quarters from ${sourceCurrencySet.join("/") || "local currencies"})` : ""}. Historical bars are taxonomy-harmonized by period.`
+        : `币种：${currencySummary}${convertedQuarterCount ? `（${convertedQuarterCount}/${quarterCount} 个季度由 ${sourceCurrencySet.join("/") || "本币"} 折算）` : ""}。历史季度按分期口径进行分类对齐。`;
     refs.footnoteText.textContent =
       currentChartLanguage() === "en"
         ? `Color mappings are brand-driven and remain stable by segment key within the selected window.`
@@ -1260,10 +1230,6 @@ async function automationRenderSelection(options = {}) {
   renderCoverage();
   renderCurrent();
   await waitForAnimationFrames(2);
-  const barHistory =
-    currentChartViewMode() === "bars" && state.currentSnapshot && company
-      ? EarningsVizRuntime.render.renderRevenueSegmentBarsSvg(state.currentSnapshot, company, { maxQuarters: 30 }).history
-      : null;
   return {
     companyId: state.selectedCompanyId,
     quarterKey: state.selectedQuarter,
@@ -1271,7 +1237,6 @@ async function automationRenderSelection(options = {}) {
     language: currentChartLanguage(),
     filenameStem: currentFilenameStem(),
     status: refs.statusText?.textContent || "",
-    coverageDiagnostics: barHistory?.coverageDiagnostics || null,
   };
 }
 

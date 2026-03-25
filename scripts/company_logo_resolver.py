@@ -206,6 +206,47 @@ def detect_dimensions(content: bytes, mime: str) -> tuple[int, int]:
         return (0, 0)
 
 
+def asset_is_catalog_usable(asset: dict[str, Any] | None) -> bool:
+    if not isinstance(asset, dict):
+        return False
+    mime = str(asset.get("mime") or "").strip().lower()
+    source_kind = str(asset.get("sourceKind") or "").strip().lower()
+    source_url = str(asset.get("url") or asset.get("sourceUrl") or "").strip().lower()
+    width = int(asset.get("width") or 0)
+    height = int(asset.get("height") or 0)
+    quality_score = int(asset.get("score") or asset.get("qualityScore") or 0)
+    if not mime.startswith("image/"):
+        return False
+    if source_url.startswith("manual://"):
+        return False
+    if source_kind == "conventional-fallback":
+        return False
+    if mime == "image/x-icon":
+        return False
+    if mime == "image/svg+xml":
+        return quality_score >= 120
+    if max(width, height) < 96:
+        return False
+    if "favicon" in source_url and quality_score < 132:
+        return False
+    return quality_score >= 108
+
+
+def catalog_entry_is_usable(entry: dict[str, Any] | None) -> bool:
+    if not isinstance(entry, dict) or not entry.get("dataUrl"):
+        return False
+    return asset_is_catalog_usable(
+        {
+            "mime": entry.get("mime"),
+            "sourceKind": entry.get("sourceKind"),
+            "sourceUrl": entry.get("sourceUrl"),
+            "width": entry.get("width"),
+            "height": entry.get("height"),
+            "qualityScore": entry.get("qualityScore"),
+        }
+    )
+
+
 def encode_data_url(mime: str, content: bytes) -> str:
     return f"data:{mime};base64,{base64.b64encode(content).decode('ascii')}"
 
@@ -646,21 +687,27 @@ def ensure_logo_catalog_entry(company: dict[str, Any], refresh: bool = False) ->
     logos = catalog.setdefault("logos", {})
     existing = logos.get(canonical_key)
     alias_changed = merge_aliases(catalog, canonical_key, company_alias_keys(company, normalize_domain((existing or {}).get("domain"))))
-    if existing and existing.get("dataUrl") and not refresh:
+    if existing and catalog_entry_is_usable(existing) and not refresh:
         if alias_changed:
             save_logo_catalog(catalog)
         return existing
 
     session = requests.Session()
     session.headers.update(REQUEST_HEADERS)
-    website_url, website_source = resolve_official_website(session, company, catalog)
+    try:
+        website_url, website_source = resolve_official_website(session, company, catalog)
+    except Exception:
+        website_url, website_source = "", ""
     if not website_url:
         if alias_changed:
             save_logo_catalog(catalog)
         return existing
 
-    asset = resolve_logo_from_website(session, website_url)
-    if not asset:
+    try:
+        asset = resolve_logo_from_website(session, website_url)
+    except Exception:
+        asset = None
+    if not asset_is_catalog_usable(asset):
         if alias_changed:
             save_logo_catalog(catalog)
         return existing
@@ -676,6 +723,7 @@ def ensure_logo_catalog_entry(company: dict[str, Any], refresh: bool = False) ->
         "dataUrl": encode_data_url(asset["mime"], asset["content"]),
         "width": int(asset["width"]),
         "height": int(asset["height"]),
+        "qualityScore": int(asset.get("score") or 0),
     }
     logos[canonical_key] = entry
     merge_aliases(catalog, canonical_key, company_alias_keys(company, domain))

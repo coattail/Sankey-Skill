@@ -139,6 +139,10 @@ def main() -> int:
         "selectedQuarter": preview_summary.get("selectedQuarter"),
         "imageOutputDir": export_summary.get("outputDir"),
         "charts": export_summary.get("charts", []),
+        "barCoverageDiagnostics": next(
+            (item.get("coverageDiagnostics") for item in export_summary.get("charts", []) if item.get("viewMode") == "bars"),
+            None,
+        ),
         "filingUrl": preview_summary.get("filingUrl") or "",
     }
     print(json.dumps(result, ensure_ascii=False, indent=2))

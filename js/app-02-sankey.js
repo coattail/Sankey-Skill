@@ -1858,7 +1858,20 @@ function renderPixelReplicaSvg(snapshot) {
           }
         )
       : costBreakdownSlices.map((slice) => ({ ...slice }));
-  let opexSourceSlices = opexSlices.map((slice) => ({ ...slice }));
+  const opexSourceMinHeight = scaleY(
+    safeNumber(snapshot.layout?.opexSourceMinHeight, Math.max(branchSourceMinThickness, opexItems.length >= 3 ? 8 : 6))
+  );
+  let opexSourceSlices =
+    opexSlices.length > 1
+      ? fitSlicesToBand(
+          opexSlices.map((slice) => ({ ...slice })),
+          opexTop,
+          opexBottom,
+          {
+            minHeight: opexSourceMinHeight,
+          }
+        )
+      : opexSlices.map((slice) => ({ ...slice }));
   const shiftBoxCenter = (box, nextCenter) => {
     const delta = nextCenter - safeNumber(box?.center, nextCenter);
     if (!(Math.abs(delta) > 0.01)) return box;

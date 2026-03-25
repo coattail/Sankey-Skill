@@ -11,7 +11,7 @@ from html import unescape
 from pathlib import Path
 from typing import Any
 
-from ocr_utils import ensure_vision_ocr_binary, ocr_image_bytes, ocr_image_path
+from ocr_utils import ensure_vision_ocr_binary, ocr_image_bytes, ocr_image_path, ocr_image_path_structured
 from pypdf import PdfReader
 
 from official_financials import _extract_html_tables, _normalize_table_key, _parse_number
@@ -35,7 +35,7 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 CACHE_DIR = ROOT_DIR / "data" / "cache" / "official-revenue-structures"
 OFFICIAL_SEGMENT_CACHE_DIR = ROOT_DIR / "data" / "cache" / "official-segments"
 OFFICIAL_FINANCIAL_CACHE_DIR = ROOT_DIR / "data" / "cache" / "official-financials"
-CACHE_VERSION = "20260323-v6"
+CACHE_VERSION = "20260326-v7"
 
 XBRL_AXIS_COMPANY_CONFIGS: dict[str, dict[str, Any]] = {
     "mastercard": {
@@ -2453,21 +2453,182 @@ def _normalize_region_member_key(name: str) -> str:
     }.get(name, _normalize_member_key(name))
 
 
-def _parse_asml_mix_text(ocr_text: str) -> dict[str, float]:
-    normalized = re.sub(r"\s+", " ", ocr_text).replace("letrology", "Metrology").replace("Inspection 4 %", "Inspection 4%")
+def _asml_slide_quarter_label(quarter: str) -> str:
+    year = str(quarter)[:4]
+    quarter_num = str(quarter)[-1]
+    if year.isdigit() and quarter_num.isdigit():
+        return f"Q{quarter_num}'{year[2:4]}"
+    return str(quarter)
+
+
+def _asml_prior_quarter(quarter: str) -> str | None:
+    match = re.fullmatch(r"(\d{4})Q([1-4])", str(quarter))
+    if not match:
+        return None
+    year = int(match.group(1))
+    quarter_num = int(match.group(2))
+    if quarter_num == 1:
+        return f"{year - 1}Q4"
+    return f"{year}Q{quarter_num - 1}"
+
+
+def _parse_asml_mix_text(ocr_text: str, quarter: str | None = None) -> dict[str, float]:
+    normalized = re.sub(r"\s+", " ", ocr_text)
+    normalized = (
+        normalized.replace("letrology", "Metrology")
+        .replace("Inspection 4 %", "Inspection 4%")
+        .replace("ArFdry", "ArF Dry")
+        .replace("ArF dry", "ArF Dry")
+        .replace("I Line", "I-line")
+        .replace("I-linee", "I-line")
+        .replace("I-Line", "I-line")
+        .replace("Metrology &", "Metrology & ")
+        .replace("Metrology&", "Metrology & ")
+        .replace("’", "'")
+        .replace("‘", "'")
+    )
+    normalized = re.sub(r"([A-Za-z])\s*-\s*(\d+%)", r"\1 \2", normalized)
+    section = normalized
+    if quarter:
+        prior_quarter = _asml_prior_quarter(quarter)
+        prior_label = _asml_slide_quarter_label(prior_quarter) if prior_quarter else None
+        if prior_label and prior_label in section:
+            section = section.split(prior_label, 1)[0]
     percent_map: dict[str, float] = {}
     patterns = {
-        "euv": (r"\bEUV\s+(\d+)%", "EUV"),
-        "arfi": (r"\bArFi\s+(\d+)%", "ArFi"),
-        "arfdry": (r"\bArF Dry\s+(\d+)%", "ArF Dry"),
-        "krf": (r"\bKrF\s+(\d+)%", "KrF"),
-        "iline": (r"\bI-line\s+(\d+)%", "I-line"),
-        "metrologyinspection": (r"\bMetrology\s*&\s*Inspection\s+(\d+)%", "Metrology & Inspection"),
+        "euv": [
+            r"\bEUV\b[^\d%]{0,12}(\d{1,2})%",
+        ],
+        "arfi": [
+            r"\bArFi\b[^\d%]{0,12}(\d{1,2})%",
+        ],
+        "arfdry": [
+            r"\bArF\s*Dry\b[^\d%]{0,12}(\d{1,2})%",
+        ],
+        "krf": [
+            r"\bKrF\b[^\d%]{0,12}(\d{1,2})%",
+        ],
+        "iline": [
+            r"\bI[\-\s]?line\b[^\d%]{0,12}(\d{1,2})%",
+        ],
+        "metrologyinspection": [
+            r"\bMetrology\s*&\s*Inspection\b[^\d%]{0,12}(\d{1,2})%",
+        ],
     }
-    for member_key, (pattern, _) in patterns.items():
-        match = re.search(pattern, normalized, re.IGNORECASE)
-        if match:
-            percent_map[member_key] = float(match.group(1))
+    for member_key, pattern_list in patterns.items():
+        for pattern in pattern_list:
+            match = re.search(pattern, section, re.IGNORECASE)
+            if match:
+                percent_map[member_key] = float(match.group(1))
+                break
+    ordered_keys = ["euv", "arfi", "arfdry", "krf", "iline", "metrologyinspection"]
+    total_pct = sum(percent_map.values())
+    missing_keys = [member_key for member_key in ordered_keys if member_key not in percent_map]
+    if len(missing_keys) == 1 and 80 <= total_pct < 100:
+        percent_map[missing_keys[0]] = round(100 - total_pct, 1)
+    return percent_map
+
+
+def _ocr_image_observations_from_url(url: str) -> list[dict[str, float | str]]:
+    image_bytes = _request(url)
+    with tempfile.TemporaryDirectory() as temp_dir:
+        suffix = Path(url).suffix or ".png"
+        image_path = Path(temp_dir) / f"ocr{suffix}"
+        image_path.write_bytes(image_bytes)
+        return ocr_image_path_structured(image_path)
+
+
+def _nearest_percent_below(
+    anchor: dict[str, float | str],
+    observations: list[dict[str, float | str]],
+    *,
+    max_dx: float = 0.045,
+    max_dy: float = 0.06,
+) -> float | None:
+    best_value: float | None = None
+    best_score: float | None = None
+    anchor_x = float(anchor.get("x") or 0.0)
+    anchor_y = float(anchor.get("y") or 0.0)
+    anchor_width = float(anchor.get("width") or 0.0)
+    anchor_height = float(anchor.get("height") or 0.0)
+    for observation in observations:
+        text = str(observation.get("text") or "").strip()
+        match = re.fullmatch(r"(\d{1,2})%", text)
+        if not match:
+            continue
+        obs_x = float(observation.get("x") or 0.0)
+        obs_y = float(observation.get("y") or 0.0)
+        obs_width = float(observation.get("width") or 0.0)
+        obs_height = float(observation.get("height") or 0.0)
+        dy = (anchor_y + anchor_height / 2) - (obs_y + obs_height / 2)
+        dx = abs((anchor_x + anchor_width / 2) - (obs_x + obs_width / 2))
+        if dy <= 0 or dy > max_dy or dx > max_dx:
+            continue
+        score = dy + dx * 0.6
+        if best_score is None or score < best_score:
+            best_score = score
+            best_value = float(match.group(1))
+    return best_value
+
+
+def _parse_asml_mix_observations(observations: list[dict[str, float | str]], quarter: str) -> dict[str, float]:
+    if not observations:
+        return {}
+    current_label = _asml_slide_quarter_label(quarter)
+    prior_quarter = _asml_prior_quarter(quarter)
+    prior_label = _asml_slide_quarter_label(prior_quarter) if prior_quarter else None
+    current_obs = next((item for item in observations if str(item.get("text") or "").strip().replace("’", "'") == current_label), None)
+    prior_obs = (
+        next((item for item in observations if str(item.get("text") or "").strip().replace("’", "'") == prior_label), None)
+        if prior_label
+        else None
+    )
+    if current_obs is None:
+        return {}
+    current_y = float(current_obs.get("y") or 0.0)
+    prior_y = float(prior_obs.get("y") or 0.0) if prior_obs else 0.0
+    cutoff_y = ((current_y + prior_y) / 2) if prior_obs else max(current_y - 0.26, 0)
+    current_section = [item for item in observations if float(item.get("y") or 0.0) >= cutoff_y]
+    percent_map: dict[str, float] = {}
+    direct_patterns = {
+        "arfdry": r"\bArF\s*Dry\s+(\d{1,2})%",
+        "krf": r"\bKrF\s+(\d{1,2})%",
+        "iline": r"\bI[\-\s]?line\s+(\d{1,2})%",
+        "metrologyinspection": r"\bInspection\s+(\d{1,2})%",
+    }
+    for member_key, pattern in direct_patterns.items():
+        for observation in current_section:
+            text = str(observation.get("text") or "")
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                percent_map[member_key] = float(match.group(1))
+                break
+
+    anchor_patterns = {
+        "arfi": r"\bArFi\b",
+        "euv": r"\bEUV\b",
+    }
+    for member_key, pattern in anchor_patterns.items():
+        anchor = next(
+            (
+                item
+                for item in current_section
+                if re.search(pattern, str(item.get("text") or ""), re.IGNORECASE)
+                and not re.search(r"\d%", str(item.get("text") or ""))
+            ),
+            None,
+        )
+        if anchor is None:
+            continue
+        percent_value = _nearest_percent_below(anchor, current_section)
+        if percent_value is not None:
+            percent_map[member_key] = percent_value
+
+    ordered_keys = ["euv", "arfi", "arfdry", "krf", "iline", "metrologyinspection"]
+    total_pct = sum(percent_map.values())
+    missing_keys = [member_key for member_key in ordered_keys if member_key not in percent_map]
+    if len(missing_keys) == 1 and 80 <= total_pct < 100:
+        percent_map[missing_keys[0]] = round(100 - total_pct, 1)
     return percent_map
 
 
@@ -2737,9 +2898,16 @@ def _parse_asml_records(company: dict[str, Any], cik: int) -> dict[str, Any]:
                     break
             if exact_total is None or exact_installed is None:
                 continue
-            if mix_ocr_text is None:
-                mix_ocr_text = _ocr_image(mix_source_url)
-            tech_mix = _parse_asml_mix_text(mix_ocr_text)
+            tech_mix: dict[str, float] = {}
+            if mix_source_url.lower().endswith((".jpg", ".jpeg", ".png")):
+                try:
+                    tech_mix = _parse_asml_mix_observations(_ocr_image_observations_from_url(mix_source_url), quarter)
+                except Exception:  # noqa: BLE001
+                    tech_mix = {}
+            if len(tech_mix) < 5:
+                if mix_ocr_text is None:
+                    mix_ocr_text = _ocr_image(mix_source_url)
+                tech_mix = _parse_asml_mix_text(mix_ocr_text, quarter)
             if len(tech_mix) < 5:
                 result["errors"].append(f"{filing_date}: asml-tech-mix-ocr-incomplete")
                 continue

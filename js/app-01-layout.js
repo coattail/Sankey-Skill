@@ -33,9 +33,79 @@ function normalizeBreakdownItems(items = [], fallbackSourceUrl = null, defaultMo
     .filter((item) => safeNumber(item.valueBn) > 0.02);
 }
 
+function reconcileBreakdownItemsToTarget(items, totalValueBn, options = {}) {
+  const normalizedItems = normalizeBreakdownItems(items, options.fallbackSourceUrl || null, options.defaultMode || "negative-parentheses");
+  if (!normalizedItems.length) return [];
+  if (totalValueBn === null || totalValueBn === undefined || totalValueBn === "") {
+    return normalizedItems;
+  }
+  const targetTotalBn = Math.max(safeNumber(totalValueBn), 0);
+  if (targetTotalBn <= 0.05) return [];
+  const tolerance = Math.max(
+    safeNumber(options.baseTolerance, 0.08),
+    targetTotalBn * safeNumber(options.relativeToleranceFactor, 0.01)
+  );
+  const rawSumBn = normalizedItems.reduce((sum, item) => sum + Math.max(safeNumber(item?.valueBn), 0), 0);
+  const rawFitsTarget =
+    normalizedItems.every((item) => Math.max(safeNumber(item?.valueBn), 0) <= targetTotalBn + tolerance) &&
+    rawSumBn <= targetTotalBn + tolerance;
+  if (rawFitsTarget) {
+    const itemsWithResidual = normalizedItems.map((item) => ({
+      ...item,
+      valueBn: Number(Math.max(safeNumber(item?.valueBn), 0).toFixed(3)),
+    }));
+    const residualBn = targetTotalBn - rawSumBn;
+    if (residualBn > tolerance) {
+      itemsWithResidual.push({
+        name: options.residualName || "Residual",
+        nameZh: options.residualNameZh || "其他",
+        valueBn: Number(residualBn.toFixed(3)),
+        valueFormat: options.defaultMode || "negative-parentheses",
+        sourceUrl: options.fallbackSourceUrl || normalizedItems[0]?.sourceUrl || null,
+      });
+    }
+    return itemsWithResidual.filter((item) => safeNumber(item?.valueBn) > 0.02);
+  }
+  if (normalizedItems.length === 1) {
+    return [
+      {
+        ...normalizedItems[0],
+        valueBn: Number(Math.min(Math.max(safeNumber(normalizedItems[0]?.valueBn), 0), targetTotalBn).toFixed(3)),
+      },
+    ].filter((item) => safeNumber(item?.valueBn) > 0.02);
+  }
+  if (rawSumBn <= 0.0001) return [];
+  const scaleFactor = targetTotalBn / rawSumBn;
+  const scaledItems = normalizedItems.map((item, index) => {
+    const scaledValueBn =
+      index === normalizedItems.length - 1
+        ? Math.max(
+            targetTotalBn -
+              normalizedItems
+                .slice(0, index)
+                .reduce((sum, priorItem) => sum + Number((Math.max(safeNumber(priorItem?.valueBn), 0) * scaleFactor).toFixed(3)), 0),
+            0
+          )
+        : Number((Math.max(safeNumber(item?.valueBn), 0) * scaleFactor).toFixed(3));
+    return {
+      ...item,
+      valueBn: Number(scaledValueBn.toFixed(3)),
+    };
+  });
+  return scaledItems.filter((item) => safeNumber(item?.valueBn) > 0.02);
+}
+
 function resolveDirectCostBreakdown(snapshot, company, entry) {
   if (snapshot?.costBreakdown?.length) {
-    return normalizeBreakdownItems(snapshot.costBreakdown);
+    const targetCostBn =
+      snapshot?.costOfRevenueBn !== null && snapshot?.costOfRevenueBn !== undefined
+        ? safeNumber(snapshot.costOfRevenueBn)
+        : entry?.costOfRevenueBn;
+    return reconcileBreakdownItemsToTarget(snapshot.costBreakdown, targetCostBn, {
+      fallbackSourceUrl: snapshot?.sourceUrl || null,
+      residualName: "Residual cost",
+      residualNameZh: "其他成本",
+    });
   }
   const supplemental = supplementalComponentsFor(company, snapshot?.quarterKey || entry?.quarterKey);
   const entrySupplemental = entry?.supplementalComponents || {};
@@ -46,7 +116,15 @@ function resolveDirectCostBreakdown(snapshot, company, entry) {
     entrySupplemental?.costBreakdown ||
     supplemental?.officialCostBreakdown ||
     supplemental?.costBreakdown;
-  return normalizeBreakdownItems(breakdown, supplemental?.sourceUrl || null);
+  const targetCostBn =
+    snapshot?.costOfRevenueBn !== null && snapshot?.costOfRevenueBn !== undefined
+      ? safeNumber(snapshot.costOfRevenueBn)
+      : entry?.costOfRevenueBn;
+  return reconcileBreakdownItemsToTarget(breakdown, targetCostBn, {
+    fallbackSourceUrl: supplemental?.sourceUrl || null,
+    residualName: "Residual cost",
+    residualNameZh: "其他成本",
+  });
 }
 
 function resolveProfileCostBreakdown(snapshot, company, entry) {
@@ -233,6 +311,14 @@ function resolvedNetOutcomeValue(snapshot) {
   return safeNumber(snapshot?.netProfitBn, 0);
 }
 
+function resolvedOperatingOutcomeValue(snapshot) {
+  return safeNumber(snapshot?.operatingProfitBn, 0);
+}
+
+function isLossMakingOperatingOutcome(snapshot) {
+  return resolvedOperatingOutcomeValue(snapshot) < -0.02;
+}
+
 function isLossMakingNetOutcome(snapshot) {
   return resolvedNetOutcomeValue(snapshot) < -0.05;
 }
@@ -246,9 +332,19 @@ function resolvedNetOutcomeLabel(snapshot) {
   return isLossMakingNetOutcome(snapshot) ? "Net loss" : "Net profit";
 }
 
+function resolvedOperatingOutcomeLabel(snapshot) {
+  if (snapshot?.operatingProfitLabel) return snapshot.operatingProfitLabel;
+  return isLossMakingOperatingOutcome(snapshot) ? "Operating loss" : "Operating profit";
+}
+
 function formatNetOutcomeBillions(snapshot) {
   const value = resolvedNetOutcomeValue(snapshot);
   return isLossMakingNetOutcome(snapshot) ? formatBillions(value, true) : formatBillions(value);
+}
+
+function formatOperatingOutcomeBillions(snapshot) {
+  const value = resolvedOperatingOutcomeValue(snapshot);
+  return isLossMakingOperatingOutcome(snapshot) ? formatBillions(value, true) : formatBillions(value);
 }
 
 function weightedMetricForGroups(groups, key, valueKey = "valueBn") {
@@ -2518,8 +2614,13 @@ function resolveAnchoredBandBoxes(entries, minY, maxY, options = {}) {
 }
 
 function logoFrameMetrics(logoKey, context = "corporate") {
-  const asset = getLogoAsset(logoKey);
   const normalizedKey = normalizeLogoKey(logoKey);
+  if (context === "corporate") {
+    if (normalizedKey === "meituan") return { width: 118, height: 118, paddingX: 0, paddingY: 0, radius: 26, showPlate: false };
+    if (normalizedKey === "byd") return { width: 188, height: 92, paddingX: 0, paddingY: 0, radius: 0, showPlate: false };
+    if (normalizedKey === "jd") return { width: 188, height: 64, paddingX: 0, paddingY: 0, radius: 0, showPlate: false };
+  }
+  const asset = getLogoAsset(logoKey);
   if (!asset) {
     return context === "corporate"
       ? { width: 116, height: 116, padding: 14, radius: 30 }
@@ -2573,24 +2674,48 @@ function renderImageLogo(asset, x, y, options = {}) {
 function renderCorporateLogo(logoKey, x, y, options = {}) {
   const { scale = 1 } = options;
   const effectiveScale = scale * CORPORATE_LOGO_LINEAR_SCALE_MULTIPLIER;
-  if (normalizeLogoKey(logoKey) === "jpmorgan") {
+  const normalizedKey = normalizeLogoKey(logoKey);
+  if (normalizedKey === "jpmorgan") {
     return `
       <g transform="translate(${x}, ${y}) scale(${effectiveScale})">
         <text x="0" y="34" font-family="Aptos, Segoe UI, Arial, Helvetica, sans-serif" font-size="34" font-weight="700" letter-spacing="-0.4" fill="#1F3C88">JPMorganChase</text>
       </g>
     `;
   }
-  if (normalizeLogoKey(logoKey) === "exxon") {
+  if (normalizedKey === "exxon") {
     return `
       <g transform="translate(${x}, ${y}) scale(${effectiveScale})">
         <text x="0" y="36" font-family="Aptos, Segoe UI, Arial, Helvetica, sans-serif" font-size="36" font-weight="800" letter-spacing="-1.1" fill="#E51636">ExxonMobil</text>
       </g>
     `;
   }
-  if (normalizeLogoKey(logoKey) === "eli-lilly") {
+  if (normalizedKey === "eli-lilly") {
     return `
       <g transform="translate(${x}, ${y}) scale(${effectiveScale})">
         <text x="0" y="52" font-family="Times New Roman, Georgia, serif" font-style="italic" font-size="56" font-weight="700" fill="#111111">Lilly</text>
+      </g>
+    `;
+  }
+  if (normalizedKey === "meituan") {
+    return `
+      <g transform="translate(${x}, ${y}) scale(${effectiveScale})">
+        <rect x="2" y="2" width="114" height="114" rx="24" fill="#FFD100" stroke="#F59E0B" stroke-width="4"></rect>
+        <text x="59" y="74" text-anchor="middle" font-family="PingFang SC, Hiragino Sans GB, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="42" font-weight="800" fill="#111111">美团</text>
+      </g>
+    `;
+  }
+  if (normalizedKey === "byd") {
+    return `
+      <g transform="translate(${x}, ${y}) scale(${effectiveScale})">
+        <ellipse cx="94" cy="46" rx="82" ry="32" fill="none" stroke="#D71920" stroke-width="9"></ellipse>
+        <text x="94" y="58" text-anchor="middle" font-family="Aptos, Segoe UI, Arial, Helvetica, sans-serif" font-size="46" font-weight="800" letter-spacing="1.6" fill="#D71920">BYD</text>
+      </g>
+    `;
+  }
+  if (normalizedKey === "jd") {
+    return `
+      <g transform="translate(${x}, ${y}) scale(${effectiveScale})">
+        <text x="0" y="48" font-family="Aptos, Segoe UI, Arial, Helvetica, sans-serif" font-size="48" font-weight="800" letter-spacing="-0.8" fill="#E1251B">JD.com</text>
       </g>
     `;
   }
@@ -2606,7 +2731,7 @@ function renderCorporateLogo(logoKey, x, y, options = {}) {
   }
   const asset = getLogoAsset(logoKey);
   if (asset) {
-    const company = getCompany(normalizeLogoKey(logoKey));
+    const company = getCompany(normalizedKey);
     const primary = company?.brand?.primary || "#CBD5E1";
     const metrics = logoFrameMetrics(logoKey, "corporate");
     return renderImageLogo(asset, x, y, {
@@ -2853,7 +2978,16 @@ function prototypeBandConfig(templateTokens, bandKey, count = 0) {
 }
 
 function renderReplicaFooter(snapshot) {
-  return "";
+  if (!snapshot?.usesFxConversion) return "";
+  const footerX = safeNumber(snapshot.layout?.footerX, 40);
+  const footerY = safeNumber(
+    snapshot.layout?.footerY,
+    safeNumber(snapshot.layout?.canvasHeight, BASE_TEMPLATE_TOKENS.layout.canvasHeight) - 34
+  );
+  const footerFontSize = safeNumber(snapshot.layout?.footerFontSize, 20);
+  const footerText =
+    currentChartLanguage() === "en" ? "Converted to USD by filing-date FX rates." : "已按申报日汇率折算为美元。";
+  return `<text x="${footerX}" y="${footerY}" text-anchor="start" font-size="${footerFontSize}" fill="#7B8490">${escapeHtml(footerText)}</text>`;
 }
 
 function renderRegionMapLockup(lockupKey, x, y, scale = 1) {

@@ -389,6 +389,68 @@ function resolveNormalizedNonOperating(entry, operatingProfitBn, pretaxIncomeBn)
   };
 }
 
+function resolveNormalizedPretaxIncome(entry, operatingProfitBn) {
+  const sourcePretaxIncomeBn =
+    entry?.pretaxIncomeBn !== null && entry?.pretaxIncomeBn !== undefined ? safeNumber(entry.pretaxIncomeBn) : null;
+  const netPlusTaxPretaxBn =
+    entry?.netIncomeBn !== null &&
+    entry?.netIncomeBn !== undefined &&
+    entry?.taxBn !== null &&
+    entry?.taxBn !== undefined
+      ? safeNumber(entry.netIncomeBn) + safeNumber(entry.taxBn)
+      : null;
+  const operatingBridgePretaxBn =
+    operatingProfitBn !== null &&
+    operatingProfitBn !== undefined &&
+    entry?.nonOperatingBn !== null &&
+    entry?.nonOperatingBn !== undefined
+      ? safeNumber(operatingProfitBn) + safeNumber(entry.nonOperatingBn)
+      : null;
+  const alignsWith = (left, right) => {
+    if (left === null || left === undefined || right === null || right === undefined) return false;
+    const tolerance = Math.max(0.25, Math.abs(safeNumber(right)) * 0.05);
+    return Math.abs(safeNumber(left) - safeNumber(right)) <= tolerance;
+  };
+  if (sourcePretaxIncomeBn === null) {
+    return {
+      value: netPlusTaxPretaxBn !== null ? netPlusTaxPretaxBn : operatingBridgePretaxBn,
+      sourceReliable: false,
+      source: null,
+      reconciled: netPlusTaxPretaxBn !== null ? netPlusTaxPretaxBn : operatingBridgePretaxBn,
+    };
+  }
+  if (alignsWith(sourcePretaxIncomeBn, netPlusTaxPretaxBn) || alignsWith(sourcePretaxIncomeBn, operatingBridgePretaxBn)) {
+    return {
+      value: sourcePretaxIncomeBn,
+      sourceReliable: true,
+      source: sourcePretaxIncomeBn,
+      reconciled: sourcePretaxIncomeBn,
+    };
+  }
+  if (netPlusTaxPretaxBn !== null) {
+    return {
+      value: netPlusTaxPretaxBn,
+      sourceReliable: false,
+      source: sourcePretaxIncomeBn,
+      reconciled: netPlusTaxPretaxBn,
+    };
+  }
+  if (operatingBridgePretaxBn !== null) {
+    return {
+      value: operatingBridgePretaxBn,
+      sourceReliable: false,
+      source: sourcePretaxIncomeBn,
+      reconciled: operatingBridgePretaxBn,
+    };
+  }
+  return {
+    value: sourcePretaxIncomeBn,
+    sourceReliable: true,
+    source: sourcePretaxIncomeBn,
+    reconciled: sourcePretaxIncomeBn,
+  };
+}
+
 function buildGenericBreakdown(entry) {
   const rawItems = [];
   if (entry.rndBn && entry.rndBn > 0.05) {
@@ -480,6 +542,14 @@ function buildGenericBreakdown(entry) {
   return items;
 }
 
+function reconcileExpenseBreakdownToTarget(items, totalValueBn, options = {}) {
+  return reconcileBreakdownItemsToTarget(items, totalValueBn, {
+    ...options,
+    residualName: "Residual OpEx",
+    residualNameZh: "其他营业费用",
+  });
+}
+
 function firstResolvedBreakdownNumber(...values) {
   for (const value of values) {
     if (value === null || value === undefined || value === "") continue;
@@ -493,7 +563,9 @@ function firstResolvedBreakdownNumber(...values) {
 
 function resolveOperatingExpenseBreakdown(snapshot, company, entry) {
   if (snapshot?.opexBreakdown?.length) {
-    return normalizeBreakdownItems(snapshot.opexBreakdown, snapshot?.sourceUrl || null);
+    return reconcileExpenseBreakdownToTarget(snapshot.opexBreakdown, snapshot?.operatingExpensesBn, {
+      fallbackSourceUrl: snapshot?.sourceUrl || null,
+    });
   }
   const supplemental = supplementalComponentsFor(company, snapshot?.quarterKey || entry?.quarterKey);
   const entrySupplemental = entry?.supplementalComponents || {};
@@ -506,7 +578,15 @@ function resolveOperatingExpenseBreakdown(snapshot, company, entry) {
     supplemental?.opexBreakdown;
   const sourceUrl = supplemental?.sourceUrl || entrySupplemental?.sourceUrl || null;
   if (Array.isArray(directBreakdown) && directBreakdown.length) {
-    return normalizeBreakdownItems(directBreakdown, sourceUrl);
+    const targetOperatingExpensesBn = firstResolvedBreakdownNumber(
+      snapshot?.operatingExpensesBn,
+      entry?.operatingExpensesBn,
+      entrySupplemental?.operatingExpensesBn,
+      supplemental?.operatingExpensesBn
+    );
+    return reconcileExpenseBreakdownToTarget(directBreakdown, targetOperatingExpensesBn, {
+      fallbackSourceUrl: sourceUrl,
+    });
   }
   const resolvedEntry = {
     ...entry,
@@ -901,13 +981,14 @@ function inferResidualRevenueSegment(company, entry, rows = []) {
 
 function resolveRenderableOfficialRevenueRows(company, entry, options = {}) {
   const allowNearbyInterpolation = options.allowNearbyInterpolation !== false;
+  const includeSyntheticResidual = options.includeSyntheticResidual !== false;
   const revenueBn = safeNumber(entry?.revenueBn, null);
   const rawRows = sanitizeOfficialStructureRows(entry, entry?.officialRevenueSegments || [])
     .filter((item) => safeNumber(item?.valueBn) > 0.02)
     .sort((left, right) => safeNumber(right?.valueBn) - safeNumber(left?.valueBn));
   if (rawRows.length) {
     const nextRows = rawRows.map((item) => ({ ...item }));
-    const inferredResidual = inferResidualRevenueSegment(company, entry, nextRows);
+    const inferredResidual = includeSyntheticResidual ? inferResidualRevenueSegment(company, entry, nextRows) : null;
     if (inferredResidual) {
       nextRows.push(inferredResidual);
       nextRows.sort((left, right) => safeNumber(right?.valueBn) - safeNumber(left?.valueBn));
@@ -1143,9 +1224,9 @@ function curatedOfficialSegments(company, entry, rows, detailGroups = []) {
   return finalizeCuratedOfficialSegments(best.selected, revenueBn);
 }
 
-function buildOfficialBusinessGroups(company, entry) {
+function buildOfficialBusinessGroups(company, entry, options = {}) {
   const revenueBn = safeNumber(entry?.revenueBn);
-  const official = resolveRenderableOfficialRevenueRows(company, entry);
+  const official = resolveRenderableOfficialRevenueRows(company, entry, options);
   const detailGroups = sanitizeOfficialStructureRows(entry, entry.officialRevenueDetailGroups || [])
     .filter((item) => safeNumber(item.valueBn) > 0.02);
   if (!official.length) return null;
@@ -1398,6 +1479,9 @@ function buildOfficialDetailGroups(company, entry, businessGroups = null) {
 
 function buildGenericSnapshot(company, entry, quarterKey) {
   const companyBrand = resolvedCompanyBrand(company);
+  const displayConfig = resolveQuarterDisplayConfig(company, entry, null);
+  const formatSnapshotBillions = (value, wrapNegative = false) =>
+    formatBillionsInCurrency(safeNumber(value) * safeNumber(displayConfig.displayScaleFactor, 1), displayConfig.displayCurrency, wrapNegative);
   const grossProfitBnRaw =
     entry.grossProfitBn !== null && entry.grossProfitBn !== undefined
       ? entry.grossProfitBn
@@ -1406,28 +1490,25 @@ function buildGenericSnapshot(company, entry, quarterKey) {
         : entry.operatingIncomeBn !== null && entry.operatingExpensesBn !== null
           ? entry.operatingIncomeBn + entry.operatingExpensesBn
           : null;
-  const grossProfitBn =
-    grossProfitBnRaw !== null && grossProfitBnRaw !== undefined
-      ? grossProfitBnRaw
-      : entry.revenueBn !== null && entry.revenueBn !== undefined
-        ? entry.revenueBn
-        : null;
+  const grossProfitBn = grossProfitBnRaw !== null && grossProfitBnRaw !== undefined ? grossProfitBnRaw : null;
   const costOfRevenueBnRaw =
     entry.costOfRevenueBn !== null && entry.costOfRevenueBn !== undefined
       ? entry.costOfRevenueBn
       : entry.revenueBn !== null && grossProfitBn !== null
         ? Math.max(entry.revenueBn - grossProfitBn, 0)
         : null;
-  const costOfRevenueBn = costOfRevenueBnRaw !== null && costOfRevenueBnRaw !== undefined ? costOfRevenueBnRaw : 0;
-  const normalizedPretaxIncomeBn =
+  const costOfRevenueBn = costOfRevenueBnRaw !== null && costOfRevenueBnRaw !== undefined ? costOfRevenueBnRaw : null;
+  const hasRenderableGrossStage = grossProfitBn !== null && costOfRevenueBn !== null;
+  const bridgeCoverageMode = hasRenderableGrossStage ? "full" : "revenue-only";
+  const sourcePretaxIncomeBn =
     entry.pretaxIncomeBn !== null && entry.pretaxIncomeBn !== undefined
       ? safeNumber(entry.pretaxIncomeBn)
       : entry.netIncomeBn !== null && entry.netIncomeBn !== undefined && entry.taxBn !== null && entry.taxBn !== undefined
         ? safeNumber(entry.netIncomeBn) + safeNumber(entry.taxBn)
         : null;
   const inferredPretaxOperatingBn =
-    normalizedPretaxIncomeBn !== null && entry.nonOperatingBn !== null && entry.nonOperatingBn !== undefined
-      ? normalizedPretaxIncomeBn - safeNumber(entry.nonOperatingBn, 0)
+    sourcePretaxIncomeBn !== null && entry.nonOperatingBn !== null && entry.nonOperatingBn !== undefined
+      ? sourcePretaxIncomeBn - safeNumber(entry.nonOperatingBn, 0)
       : entry.netIncomeBn !== null && entry.netIncomeBn !== undefined
         ? safeNumber(entry.netIncomeBn) + safeNumber(entry.taxBn, 0) - safeNumber(entry.nonOperatingBn, 0)
         : null;
@@ -1435,25 +1516,49 @@ function buildGenericSnapshot(company, entry, quarterKey) {
     entry.operatingIncomeBn !== null && entry.operatingIncomeBn !== undefined
       ? entry.operatingIncomeBn
       : inferredPretaxOperatingBn;
-  const operatingStageResolution = resolveNormalizedOperatingStage(entry, grossProfitBn, costOfRevenueBn, operatingProfitBnBase);
-  const operatingProfitBn = operatingStageResolution.operatingProfitBn;
-  const operatingExpensesBn = operatingStageResolution.operatingExpensesBn;
-  const nonOperatingResolution = resolveNormalizedNonOperating(entry, operatingProfitBn, normalizedPretaxIncomeBn);
-  const inferredNonOperatingBnRaw = nonOperatingResolution.value;
+  const operatingStageResolution = hasRenderableGrossStage
+    ? resolveNormalizedOperatingStage(entry, grossProfitBn, costOfRevenueBn, operatingProfitBnBase)
+    : {
+        operatingProfitBn: null,
+        operatingExpensesBn: null,
+        sourceReliable: false,
+        reconciled: null,
+        source: entry?.operatingExpensesBn ?? null,
+        includesCostOfRevenue: false,
+      };
+  const operatingProfitBn = hasRenderableGrossStage ? operatingStageResolution.operatingProfitBn : null;
+  const operatingExpensesBn = hasRenderableGrossStage ? operatingStageResolution.operatingExpensesBn : null;
+  const pretaxResolution = hasRenderableGrossStage
+    ? resolveNormalizedPretaxIncome(entry, operatingProfitBn)
+    : {
+        value: sourcePretaxIncomeBn,
+        sourceReliable: sourcePretaxIncomeBn !== null && sourcePretaxIncomeBn !== undefined,
+        reconciled: sourcePretaxIncomeBn,
+      };
+  const normalizedPretaxIncomeBn = pretaxResolution.value;
+  const nonOperatingResolution = hasRenderableGrossStage
+    ? resolveNormalizedNonOperating(entry, operatingProfitBn, normalizedPretaxIncomeBn)
+    : {
+        value: entry.nonOperatingBn !== null && entry.nonOperatingBn !== undefined ? safeNumber(entry.nonOperatingBn) : null,
+        sourceReliable: entry.nonOperatingBn !== null && entry.nonOperatingBn !== undefined,
+        reconciled: entry.nonOperatingBn !== null && entry.nonOperatingBn !== undefined ? safeNumber(entry.nonOperatingBn) : null,
+        usePretaxResidualLabel: false,
+      };
+  const inferredNonOperatingBnRaw = hasRenderableGrossStage ? nonOperatingResolution.value : null;
   const inferredNonOperatingBn =
     inferredNonOperatingBnRaw !== null && inferredNonOperatingBnRaw !== undefined && Math.abs(safeNumber(inferredNonOperatingBnRaw)) > 0.05
       ? Number(safeNumber(inferredNonOperatingBnRaw).toFixed(3))
       : null;
   const grossMarginPct =
-    entry.grossMarginPct !== null && entry.grossMarginPct !== undefined
+    hasRenderableGrossStage && entry.grossMarginPct !== null && entry.grossMarginPct !== undefined
       ? entry.grossMarginPct
-      : entry.revenueBn
+      : hasRenderableGrossStage && entry.revenueBn
         ? (safeNumber(grossProfitBn) / entry.revenueBn) * 100
         : null;
   const operatingMarginPct =
-    entry.operatingMarginPct !== null && entry.operatingMarginPct !== undefined
+    hasRenderableGrossStage && entry.operatingMarginPct !== null && entry.operatingMarginPct !== undefined
       ? entry.operatingMarginPct
-      : entry.revenueBn && operatingProfitBn !== null && operatingProfitBn !== undefined
+      : hasRenderableGrossStage && entry.revenueBn && operatingProfitBn !== null && operatingProfitBn !== undefined
         ? (operatingProfitBn / entry.revenueBn) * 100
         : null;
   const normalizedEntry = {
@@ -1490,16 +1595,32 @@ function buildGenericSnapshot(company, entry, quarterKey) {
     entry.statementSource === "stockanalysis-financials"
       ? "当前桥图主干来自 Stock Analysis 财务表后备数据源，适用于验证非 SEC 公司扩展接入能力。"
       : usesFinancialFallback
-        ? "当前桥图主干采用官方优先的数据流程；若官方主干字段不完整，会安全回退到标准化财务表数据，而不是凭空推断错误桥段。"
-        : "模板底稿基于公开季度财务主干字段生成；若部分利润层级未直接披露，会按财报主干关系自动补齐桥图节点。";
-  const operatingLossOverflowBn = operatingProfitBn < -0.02 ? Math.abs(operatingProfitBn) : 0;
+      ? "当前桥图主干采用官方优先的数据流程；若官方主干字段不完整，会安全回退到标准化财务表数据，而不是凭空推断错误桥段。"
+      : "模板底稿基于公开季度财务主干字段生成；若部分利润层级未直接披露，会按财报主干关系自动补齐桥图节点。";
+  const operatingLossOverflowBn = hasRenderableGrossStage && operatingProfitBn < -0.02 ? Math.abs(operatingProfitBn) : 0;
+  const displayOperatingExpensesBn =
+    !hasRenderableGrossStage
+      ? null
+      : operatingLossOverflowBn > 0
+      ? Math.min(Math.max(safeNumber(operatingExpensesBn), 0), Math.max(safeNumber(grossProfitBn), 0))
+      : Math.max(safeNumber(operatingExpensesBn), 0);
   const resolvedFinancialFootnote =
-    operatingLossOverflowBn > 0
-      ? `${financialFootnote} 当前季度营业费用高于毛利，桥图会将超出毛利的 ${formatBillions(operatingLossOverflowBn)} 视作营业亏损溢出，并保留真实营业利润标签。`
+    !hasRenderableGrossStage
+      ? `${financialFootnote} 当前季度缺少可稳定还原毛利桥的财务主干字段，因此仅保留营收结构，不再伪造利润桥节点。`
+      : operatingLossOverflowBn > 0
+      ? `${financialFootnote} 当前季度实际营业费用为 ${formatSnapshotBillions(operatingExpensesBn)}；其中 ${formatSnapshotBillions(displayOperatingExpensesBn)} 由毛利覆盖，超出的 ${formatSnapshotBillions(operatingLossOverflowBn)} 会在净利桥中单列为营业亏损。`
       : financialFootnote;
   const positiveAdjustments = [];
   const belowOperatingItems = [];
-  if (inferredNonOperatingBn) {
+  if (hasRenderableGrossStage && operatingLossOverflowBn > 0.05) {
+    belowOperatingItems.push({
+      name: "Operating loss overflow",
+      nameZh: "超出毛利的营业费用",
+      valueBn: Math.abs(operatingLossOverflowBn),
+      color: "#D92D20",
+    });
+  }
+  if (hasRenderableGrossStage && inferredNonOperatingBn) {
     const residualPositiveLabel = {
       name: "Other pretax gain",
       nameZh: "其他税前收益",
@@ -1534,18 +1655,44 @@ function buildGenericSnapshot(company, entry, quarterKey) {
       });
     }
   }
-  if (entry.taxBn && entry.taxBn > 0.05) {
+  if (hasRenderableGrossStage && entry.taxBn && entry.taxBn > 0.05) {
     belowOperatingItems.push({
       name: "Tax",
       valueBn: Math.abs(entry.taxBn),
       color: "#D92D20",
     });
-  } else if (entry.taxBn && entry.taxBn < -0.05) {
+  } else if (hasRenderableGrossStage && entry.taxBn && entry.taxBn < -0.05) {
     positiveAdjustments.push({
       name: "Tax benefit",
       valueBn: Math.abs(entry.taxBn),
       color: "#16A34A",
     });
+  }
+  const explicitPositiveBridgeBn = positiveAdjustments.reduce((sum, item) => sum + Math.max(safeNumber(item?.valueBn), 0), 0);
+  const explicitNegativeBridgeBn = belowOperatingItems.reduce((sum, item) => sum + Math.max(safeNumber(item?.valueBn), 0), 0);
+  const operatingBridgeBaseBn = operatingLossOverflowBn > 0 ? 0 : safeNumber(operatingProfitBn);
+  const accountedNetBridgeBn = operatingBridgeBaseBn + explicitPositiveBridgeBn - explicitNegativeBridgeBn;
+  const targetNetBridgeBn = safeNumber(entry.netIncomeBn, null);
+  const netBridgeResidualBn =
+    targetNetBridgeBn !== null && targetNetBridgeBn !== undefined ? Number((targetNetBridgeBn - accountedNetBridgeBn).toFixed(3)) : null;
+  const netBridgeResidualTolerance =
+    targetNetBridgeBn !== null && targetNetBridgeBn !== undefined ? Math.max(0.08, Math.abs(targetNetBridgeBn) * 0.01) : 0;
+  if (hasRenderableGrossStage && netBridgeResidualBn !== null && Math.abs(netBridgeResidualBn) > netBridgeResidualTolerance) {
+    if (netBridgeResidualBn > 0) {
+      positiveAdjustments.push({
+        name: "Other net bridge gain",
+        nameZh: "其他净利调整收益",
+        valueBn: Math.abs(netBridgeResidualBn),
+        color: "#16A34A",
+      });
+    } else {
+      belowOperatingItems.push({
+        name: "Other net bridge expense",
+        nameZh: "其他净利调整费用",
+        valueBn: Math.abs(netBridgeResidualBn),
+        color: "#D92D20",
+      });
+    }
   }
   return {
     mode: "template-base",
@@ -1562,8 +1709,11 @@ function buildGenericSnapshot(company, entry, quarterKey) {
     ticker: company.ticker,
     quarterKey,
     fiscalLabel: entry.fiscalLabel || quarterKey,
-    displayCurrency: entry.displayCurrency || "USD",
-    displayScaleFactor: entry.displayScaleFactor || 1,
+    displayCurrency: displayConfig.displayCurrency,
+    sourceCurrency: displayConfig.sourceCurrency,
+    displayScaleFactor: displayConfig.displayScaleFactor,
+    usesFxConversion: displayConfig.usesFxConversion,
+    bridgeCoverageMode,
     businessGroups: [
       {
         name: "Reported revenue",
@@ -1589,14 +1739,59 @@ function buildGenericSnapshot(company, entry, quarterKey) {
     operatingMarginPct,
     operatingMarginYoyDeltaPp: entry.operatingMarginYoyDeltaPp,
     operatingExpensesBn,
+    displayOperatingExpensesBn,
+    operatingLossOverflowBn,
     netProfitBn: entry.netIncomeBn,
+    pretaxIncomeBn: normalizedPretaxIncomeBn,
     netMarginPct: entry.profitMarginPct,
     netMarginYoyDeltaPp: entry.profitMarginYoyDeltaPp,
-    opexBreakdown: resolveOperatingExpenseBreakdown(null, company, normalizedEntry),
+    opexBreakdown: hasRenderableGrossStage
+      ? resolveOperatingExpenseBreakdown(null, company, {
+          ...normalizedEntry,
+          operatingExpensesBn: displayOperatingExpensesBn,
+        })
+      : [],
     positiveAdjustments,
     belowOperatingItems,
     footnote: resolvedFinancialFootnote,
   };
+}
+
+function buildHistoryHarmonizedBusinessGroups(company, quarterKey) {
+  if (!company || !quarterKey) return null;
+  const maxQuarters = Math.max((Array.isArray(company?.quarters) ? company.quarters.length : 0) + 8, 40);
+  const history = buildRevenueSegmentBarHistory(company, quarterKey, maxQuarters, { includeAllQuarters: true });
+  const quarter = history?.quarters?.find((item) => item.quarterKey === quarterKey);
+  const displayScaleFactor = Math.max(safeNumber(quarter?.displayScaleFactor, 1), 0.000001);
+  const rawRows = Array.isArray(quarter?.segmentRows) ? quarter.segmentRows : [];
+  const candidateRows = rawRows.filter((item) => item?.key !== "reportedrevenue" && safeNumber(item?.valueBn) > 0.02);
+  if (candidateRows.length < 2) return null;
+  const compactMode = candidateRows.length >= 5;
+  return candidateRows.map((item, index) => {
+    const key = canonicalBarSegmentKey(company?.id, item?.key || item?.id || item?.name, item?.name || "");
+    const canonicalMeta = canonicalBarSegmentMeta(company?.id, key, item?.name || "Segment", item?.nameZh || "");
+    const color = history?.colorBySegment?.[key] || stableBarColorMap(company?.id, candidateRows.map((row) => row.key || row.id || row.name))[key];
+    return {
+      id: key,
+      memberKey: key,
+      name: canonicalMeta.name || item?.name || "Segment",
+      nameZh: canonicalMeta.nameZh || item?.nameZh || translateBusinessLabelToZh(item?.name || "Segment"),
+      displayLines: wrapLines(canonicalMeta.name || item?.name || "Segment", compactMode ? 14 : 16),
+      valueBn: Number((safeNumber(item?.valueBn) / displayScaleFactor).toFixed(3)),
+      yoyPct: null,
+      qoqPct: null,
+      mixPct: null,
+      operatingMarginPct: null,
+      nodeColor: color,
+      flowColor: rgba(color, compactMode ? 0.5 : 0.58),
+      labelColor: "#55595F",
+      valueColor: "#676C75",
+      compactLabel: compactMode,
+      sourceUrl: null,
+      filingDate: quarter?.entry?.statementFilingDate || null,
+      periodEnd: quarter?.entry?.periodEnd || null,
+    };
+  });
 }
 
 function buildReplicaTemplateSnapshot(company, entry, quarterKey) {
@@ -1604,6 +1799,8 @@ function buildReplicaTemplateSnapshot(company, entry, quarterKey) {
   const snapshot = buildGenericSnapshot(company, entry, quarterKey);
   const officialBusinessGroups = buildOfficialBusinessGroups(company, entry);
   const officialDetailGroups = buildOfficialDetailGroups(company, entry, officialBusinessGroups);
+  const historyHarmonizedBusinessGroups = !officialBusinessGroups ? buildHistoryHarmonizedBusinessGroups(company, quarterKey) : null;
+  const resolvedBusinessGroups = officialBusinessGroups || historyHarmonizedBusinessGroups;
   const fallbackSourceLabel = entry.statementSource === "stockanalysis-financials" ? "Stock Analysis financials fallback" : "Replica-style auto template";
   const fallbackSubtitle =
     entry.statementSource === "stockanalysis-financials"
@@ -1613,28 +1810,35 @@ function buildReplicaTemplateSnapshot(company, entry, quarterKey) {
     entry.statementSource === "stockanalysis-financials"
       ? "统一模板会复用模板集的版式语言，并以 Stock Analysis 财务表后备数据生成非 SEC 公司的利润桥。"
       : "统一模板会复用模板集的版式语言，并按当前公司的真实季度财务数据自动排版。";
+  const structureFootnote = officialBusinessGroups
+    ? "统一模板会复用模板集的版式语言，并优先使用官方财报披露的营收结构数据自动排版。"
+    : historyHarmonizedBusinessGroups
+      ? `${fallbackFootnote} 当前季度的左侧营收分类由历史分部口径统一回填，以避免同一季度因观察窗口变化而丢失分类。`
+      : fallbackFootnote;
   return {
     ...snapshot,
-    businessGroups: officialBusinessGroups || snapshot.businessGroups.map((item) => ({
+    businessGroups: resolvedBusinessGroups || snapshot.businessGroups.map((item) => ({
       ...item,
       displayLines: item.displayLines?.length ? item.displayLines : wrapLines(company.nameEn, 14),
       flowColor: item.flowColor || rgba(companyBrand.primary, 0.28),
     })),
     leftDetailGroups: officialDetailGroups || null,
-    officialRevenueStyle: inferredOfficialRevenueStyle(company, entry, officialBusinessGroups || entry.officialRevenueSegments || []) || null,
-    displayCurrency: entry.displayCurrency || snapshot.displayCurrency,
-    displayScaleFactor: entry.displayScaleFactor || snapshot.displayScaleFactor || 1,
+    officialRevenueStyle: inferredOfficialRevenueStyle(company, entry, officialBusinessGroups || historyHarmonizedBusinessGroups || entry.officialRevenueSegments || []) || null,
+    displayCurrency: snapshot.displayCurrency,
+    sourceCurrency: snapshot.sourceCurrency,
+    displayScaleFactor: snapshot.displayScaleFactor || 1,
+    usesFxConversion: snapshot.usesFxConversion,
     compactSourceLabels: entry.officialRevenueStyle === "netflix-regional-revenue" ? true : snapshot.compactSourceLabels,
     mode: "replica-template",
     modeLabel: "高精复刻版",
-    sourceLabel: officialBusinessGroups ? "Official filings segment data" : fallbackSourceLabel,
+    sourceLabel: officialBusinessGroups ? "Official filings segment data" : historyHarmonizedBusinessGroups ? "History-harmonized revenue structure" : fallbackSourceLabel,
     coverageLabel: "结构原型 + 高精模板",
     subtitle: officialBusinessGroups
       ? "Replica-style layout auto-generated from quarterly statement data and official filing segment disclosures."
+      : historyHarmonizedBusinessGroups
+        ? "Replica-style layout auto-generated from quarterly statement data and history-harmonized segment taxonomy."
       : fallbackSubtitle,
-    footnote: officialBusinessGroups
-      ? "统一模板会复用模板集的版式语言，并优先使用官方财报披露的营收结构数据自动排版。"
-      : fallbackFootnote,
+    footnote: snapshot.bridgeCoverageMode === "revenue-only" ? `${snapshot.footnote} ${structureFootnote}` : structureFootnote,
   };
 }
 
@@ -1642,16 +1846,31 @@ function mergeOfficialRevenueStructureIntoSnapshot(snapshot, company, entry) {
   if (!entry) return snapshot;
   const officialBusinessGroups = buildOfficialBusinessGroups(company, entry);
   const officialDetailGroups = buildOfficialDetailGroups(company, entry, officialBusinessGroups);
-  if (!officialBusinessGroups && !officialDetailGroups) return snapshot;
+  const historyHarmonizedBusinessGroups = !officialBusinessGroups ? buildHistoryHarmonizedBusinessGroups(company, snapshot?.quarterKey || entryQuarterKey(company, entry)) : null;
+  if (!officialBusinessGroups && !officialDetailGroups && !historyHarmonizedBusinessGroups) return snapshot;
   return {
     ...snapshot,
-    businessGroups: officialBusinessGroups || snapshot.businessGroups,
+    businessGroups: officialBusinessGroups || historyHarmonizedBusinessGroups || snapshot.businessGroups,
     leftDetailGroups: officialDetailGroups || snapshot.leftDetailGroups || null,
-    officialRevenueStyle: inferredOfficialRevenueStyle(company, entry, officialBusinessGroups || entry.officialRevenueSegments || []) || snapshot.officialRevenueStyle || null,
-    displayCurrency: entry.displayCurrency || snapshot.displayCurrency,
-    displayScaleFactor: entry.displayScaleFactor || snapshot.displayScaleFactor || 1,
-    sourceLabel: "Official filings segment data",
+    officialRevenueStyle:
+      inferredOfficialRevenueStyle(company, entry, officialBusinessGroups || historyHarmonizedBusinessGroups || entry.officialRevenueSegments || []) ||
+      snapshot.officialRevenueStyle ||
+      null,
+    displayCurrency: snapshot.displayCurrency,
+    sourceCurrency: snapshot.sourceCurrency,
+    displayScaleFactor: snapshot.displayScaleFactor || 1,
+    usesFxConversion: snapshot.usesFxConversion,
+    sourceLabel: officialBusinessGroups ? "Official filings segment data" : "History-harmonized revenue structure",
     coverageLabel: "结构原型 + 高精模板",
+    footnote: snapshot.bridgeCoverageMode === "revenue-only"
+      ? officialBusinessGroups
+        ? `${snapshot.footnote} 该季度左侧营收结构直接取自官方财报分部披露。`
+        : snapshot.footnote?.includes("历史分部口径统一回填")
+          ? snapshot.footnote
+          : `${snapshot.footnote} 当前季度的左侧营收分类由历史分部口径统一回填，以避免同一季度因观察窗口变化而丢失分类。`
+      : officialBusinessGroups || snapshot.footnote?.includes("历史分部口径统一回填")
+        ? snapshot.footnote
+        : `${snapshot.footnote} 当前季度的左侧营收分类由历史分部口径统一回填，以避免同一季度因观察窗口变化而丢失分类。`,
   };
 }
 
@@ -2268,260 +2487,45 @@ function pushPaletteColorWithContrast(palette, color, minHueDistance = 16, minLu
   }
 }
 
-function contrastRatioBetweenColors(leftColor, rightColor) {
-  const leftLum = relativeLuminance(leftColor);
-  const rightLum = relativeLuminance(rightColor);
-  const lighter = Math.max(leftLum, rightLum);
-  const darker = Math.min(leftLum, rightLum);
-  return (lighter + 0.05) / (darker + 0.05);
-}
-
-function barPaletteSeparationMetrics(candidateColor, existingColors = []) {
-  const normalizedCandidate = normalizeBarPaletteColor(candidateColor);
-  const candidateHsl = colorToHsl(normalizedCandidate);
-  if (!normalizedCandidate || !candidateHsl) {
-    return {
-      score: Number.NEGATIVE_INFINITY,
-      isAcceptable: false,
-      minHueDistance: 0,
-      minSaturationDistance: 0,
-      minLightnessDistance: 0,
-      minContrastRatio: 0,
-    };
-  }
-  if (!existingColors.length) {
-    return {
-      score: 1000,
-      isAcceptable: true,
-      minHueDistance: 360,
-      minSaturationDistance: 1,
-      minLightnessDistance: 1,
-      minContrastRatio: 21,
-    };
-  }
-  let minHueDistance = Number.POSITIVE_INFINITY;
-  let minSaturationDistance = Number.POSITIVE_INFINITY;
-  let minLightnessDistance = Number.POSITIVE_INFINITY;
-  let minContrastRatio = Number.POSITIVE_INFINITY;
-  let hasHardConflict = false;
-  existingColors.forEach((existingColor) => {
-    const normalizedExisting = normalizeBarPaletteColor(existingColor);
-    const existingHsl = colorToHsl(normalizedExisting);
-    if (!normalizedExisting || !existingHsl) return;
-    minHueDistance = Math.min(minHueDistance, hueDistanceDegrees(candidateHsl.h, existingHsl.h));
-    minSaturationDistance = Math.min(minSaturationDistance, Math.abs(candidateHsl.s - existingHsl.s));
-    minLightnessDistance = Math.min(minLightnessDistance, Math.abs(candidateHsl.l - existingHsl.l));
-    minContrastRatio = Math.min(minContrastRatio, contrastRatioBetweenColors(normalizedCandidate, normalizedExisting));
-    if (
-      barColorsAreTooSimilar(normalizedCandidate, normalizedExisting, {
-        minHueDistance: 30,
-        minSatDistance: 0.2,
-        minLightnessDistance: 0.18,
-      })
-    ) {
-      hasHardConflict = true;
-    }
-  });
-  const isAcceptable =
-    !hasHardConflict &&
-    minContrastRatio >= 1.12 &&
-    (
-      minHueDistance >= 30 ||
-      minLightnessDistance >= 0.2 ||
-      minSaturationDistance >= 0.22
-    );
-  return {
-    score:
-      minHueDistance * 1.9 +
-      minSaturationDistance * 80 +
-      minLightnessDistance * 135 +
-      minContrastRatio * 24 +
-      (isAcceptable ? 120 : -260),
-    isAcceptable,
-    minHueDistance,
-    minSaturationDistance,
-    minLightnessDistance,
-    minContrastRatio,
-  };
-}
-
-function derivedBarPaletteCandidatesFromColor(baseColor, options = {}) {
-  const normalized = normalizeBarPaletteColor(baseColor);
-  const baseHsl = colorToHsl(normalized);
-  if (!normalized || !baseHsl) return [];
-  const hueOffsets = Array.isArray(options.hueOffsets) && options.hueOffsets.length
-    ? options.hueOffsets
-    : [0, 28, -28, 52, -52, 138, -138, 180];
-  const minSaturation = clamp(safeNumber(options.minSaturation, 0.52), 0.16, 0.9);
-  const saturationTargets = Array.isArray(options.saturationTargets) && options.saturationTargets.length
-    ? options.saturationTargets.map((value) => clamp(safeNumber(value), 0, 1))
-    : [
-        clamp(Math.max(baseHsl.s, minSaturation), minSaturation, 0.88),
-        clamp(Math.max(baseHsl.s + 0.12, minSaturation), minSaturation, 0.92),
-      ];
-  const lightnessTargets = Array.isArray(options.lightnessTargets) && options.lightnessTargets.length
-    ? options.lightnessTargets.map((value) => clamp(safeNumber(value), 0, 1))
-    : [
-        clamp(baseHsl.l, 0.34, 0.6),
-        clamp(baseHsl.l + 0.15, 0.42, 0.72),
-        clamp(baseHsl.l - 0.15, 0.24, 0.52),
-      ];
-  const candidates = [];
-  hueOffsets.forEach((offset, offsetIndex) => {
-    const useLightnessIndexes =
-      offsetIndex === 0
-        ? [0, 1, 2]
-        : Math.abs(offset) >= 120
-          ? [0, 1]
-          : [0];
-    useLightnessIndexes.forEach((lightnessIndex) => {
-      saturationTargets.forEach((saturation, saturationIndex) => {
-        if (lightnessIndex > 0 && saturationIndex > 0) return;
-        candidates.push(hslToHex(baseHsl.h + offset, saturation, lightnessTargets[lightnessIndex]));
-      });
-    });
-  });
-  candidates.push(mixHex(normalized, "#FFFFFF", 0.1));
-  candidates.push(mixHex(normalized, "#111827", 0.18));
-  return uniqueBarPalette(candidates);
-}
-
-function buildDistinctBrandPalette(candidateColors = [], minCount = 8, anchorColors = []) {
-  const palette = [];
-  const anchors = uniqueBarPalette(anchorColors);
-  anchors.forEach((anchor) => {
-    const metrics = barPaletteSeparationMetrics(anchor, palette);
-    if (!palette.length || metrics.isAcceptable) {
-      palette.push(anchor);
-    }
-  });
-  const uniqueCandidates = uniqueBarPalette(candidateColors);
-  while (palette.length < minCount) {
-    let bestCandidate = null;
-    let bestScore = Number.NEGATIVE_INFINITY;
-    uniqueCandidates.forEach((candidate, index) => {
-      if (!candidate || palette.includes(candidate)) return;
-      const metrics = barPaletteSeparationMetrics(candidate, palette);
-      const preferenceBonus = Math.max(0, 26 - index * 0.45);
-      const score = metrics.score + preferenceBonus;
-      if (score > bestScore) {
-        bestCandidate = candidate;
-        bestScore = score;
-      }
-    });
-    if (!bestCandidate) break;
-    palette.push(bestCandidate);
-  }
-  return palette;
-}
-
 function companyBrandBarPalette(companyId, minCount = 8) {
   const companyKey = String(companyId || "").trim().toLowerCase();
   const overridePalette = BAR_COMPANY_PALETTE_OVERRIDES[companyKey];
+  if (Array.isArray(overridePalette) && overridePalette.length) {
+    const mergedOverride = uniqueBarPalette([...overridePalette, ...BAR_SEGMENT_COLOR_POOL]);
+    while (mergedOverride.length < minCount) {
+      const idx = mergedOverride.length % BAR_SEGMENT_COLOR_POOL.length;
+      pushPaletteColorWithContrast(mergedOverride, BAR_SEGMENT_COLOR_POOL[idx], 10, 0.03);
+    }
+    return mergedOverride;
+  }
+
   const company = getCompany(companyId) || null;
-  const brand = resolvedCompanyBrand(company);
-  const primary = normalizeBarPaletteColor(brand?.primary || "#1CA1E2") || "#1CA1E2";
-  let secondary = normalizeBarPaletteColor(brand?.secondary || mixHex(primary, "#F6B800", 0.38)) || "#F6B800";
-  let accentBase = normalizeBarPaletteColor(brand?.accent || mixHex(primary, "#FFFFFF", 0.55)) || "#7D7D80";
-  if (
-    barColorsAreTooSimilar(secondary, primary, {
-      minHueDistance: 28,
-      minSatDistance: 0.2,
-      minLightnessDistance: 0.18,
-    })
-  ) {
-    secondary = rotateColorHue(primary, 150);
-  }
-  if (
-    relativeLuminance(accentBase) > 0.8 ||
-    barColorsAreTooSimilar(accentBase, primary, {
-      minHueDistance: 26,
-      minSatDistance: 0.18,
-      minLightnessDistance: 0.16,
-    }) ||
-    barColorsAreTooSimilar(accentBase, secondary, {
-      minHueDistance: 26,
-      minSatDistance: 0.18,
-      minLightnessDistance: 0.16,
-    })
-  ) {
-    accentBase = rotateColorHue(primary, -145);
-  }
+  const primary = normalizeBarPaletteColor(company?.brand?.primary || "#1CA1E2") || "#1CA1E2";
+  const secondary = normalizeBarPaletteColor(company?.brand?.secondary || mixHex(primary, "#F6B800", 0.38)) || "#F6B800";
+  const accentBase = normalizeBarPaletteColor(company?.brand?.accent || mixHex(primary, "#FFFFFF", 0.55)) || "#7D7D80";
   const accent = relativeLuminance(accentBase) > 0.72 ? mixHex(accentBase, "#374151", 0.34) : accentBase;
   const seed = hashStringDeterministic(String(companyId || "global"));
   const complementary = rotateColorHue(primary, 180);
-  const splitA = rotateColorHue(primary, 140);
-  const splitB = rotateColorHue(primary, -140);
-  const bridgeCompanion = mixHex(primary, secondary, 0.5);
-  const warmCompanion = mixHex(complementary, "#F59E0B", 0.48);
-  const coolCompanion = mixHex(primary, "#14B8A6", 0.44);
-  const accentBridge = mixHex(accent, primary, 0.42);
+  const splitA = rotateColorHue(primary, 145);
+  const splitB = rotateColorHue(primary, -145);
+  const warmCompanion = mixHex(complementary, "#F59E0B", 0.55);
+  const coolCompanion = mixHex(primary, "#14B8A6", 0.5);
+  const neutralCompanion = mixHex(secondary, "#94A3B8", 0.35);
+  const punchCompanion = mixHex(primary, "#EF4444", 0.36);
+  const bridgeCompanion = mixHex(primary, secondary, 0.52);
   const rotatingPool = BAR_SEGMENT_COLOR_POOL.map((_, index) => BAR_SEGMENT_COLOR_POOL[(seed + index * 3) % BAR_SEGMENT_COLOR_POOL.length]);
-
-  if (Array.isArray(overridePalette) && overridePalette.length) {
-    return buildDistinctBrandPalette(
-      [
-        ...overridePalette,
-        ...derivedBarPaletteCandidatesFromColor(primary, { hueOffsets: [0, 28, -28, 145, -145, 180] }),
-        ...derivedBarPaletteCandidatesFromColor(secondary, { hueOffsets: [0, 24, -24, 180], minSaturation: 0.34 }),
-        ...derivedBarPaletteCandidatesFromColor(accent, { hueOffsets: [0, 38, -38, 180], minSaturation: 0.4 }),
-        ...rotatingPool,
-      ],
-      minCount,
-      [...overridePalette, primary, secondary, accent]
-    );
-  }
-
-  const candidatePool = [
-    primary,
-    secondary,
-    accent,
-    complementary,
-    splitA,
-    splitB,
-    bridgeCompanion,
-    warmCompanion,
-    coolCompanion,
-    accentBridge,
-    ...derivedBarPaletteCandidatesFromColor(primary, { hueOffsets: [0, 24, -24, 48, -48, 140, -140, 180] }),
-    ...derivedBarPaletteCandidatesFromColor(secondary, { hueOffsets: [0, 22, -22, 160, -160, 180], minSaturation: 0.3 }),
-    ...derivedBarPaletteCandidatesFromColor(accent, { hueOffsets: [0, 34, -34, 180], minSaturation: 0.38 }),
-    ...derivedBarPaletteCandidatesFromColor(bridgeCompanion, { hueOffsets: [0, 30, -30, 180], minSaturation: 0.44 }),
-    ...rotatingPool,
-  ];
-  return buildDistinctBrandPalette(candidatePool, minCount, [primary, secondary, accent]);
-}
-
-function pickBestBarPaletteColor(brandPalette = [], usedColors = [], preferredIndexes = []) {
-  const palette = Array.isArray(brandPalette) ? brandPalette.filter(Boolean) : [];
-  if (!palette.length) return null;
-  const orderedIndexes = [];
-  const seenIndexes = new Set();
-  (preferredIndexes || []).forEach((index) => {
-    const normalizedIndex = ((Math.trunc(safeNumber(index, 0)) % palette.length) + palette.length) % palette.length;
-    if (seenIndexes.has(normalizedIndex)) return;
-    seenIndexes.add(normalizedIndex);
-    orderedIndexes.push(normalizedIndex);
-  });
-  for (let index = 0; index < palette.length; index += 1) {
-    if (seenIndexes.has(index)) continue;
-    seenIndexes.add(index);
-    orderedIndexes.push(index);
-  }
-  let bestCandidate = null;
-  let bestScore = Number.NEGATIVE_INFINITY;
-  orderedIndexes.forEach((index, order) => {
-    const candidate = palette[index];
-    if (!candidate || usedColors.includes(candidate)) return;
-    const metrics = barPaletteSeparationMetrics(candidate, usedColors);
-    const slotBonus = Math.max(0, 24 - order * 2.5);
-    const score = metrics.score + slotBonus;
-    if (score > bestScore) {
-      bestCandidate = candidate;
-      bestScore = score;
+  const palette = [];
+  [primary, secondary, accent, complementary, splitA, splitB, warmCompanion, coolCompanion, neutralCompanion, punchCompanion, bridgeCompanion, ...rotatingPool].forEach(
+    (color) => pushPaletteColorWithContrast(palette, color, 18, 0.06)
+  );
+  while (palette.length < minCount) {
+    const idx = palette.length % BAR_SEGMENT_COLOR_POOL.length;
+    pushPaletteColorWithContrast(palette, BAR_SEGMENT_COLOR_POOL[idx], 10, 0.03);
+    if (palette.length < minCount) {
+      pushPaletteColorWithContrast(palette, mixHex(BAR_SEGMENT_COLOR_POOL[idx], "#FFFFFF", 0.12), 10, 0.03);
     }
-  });
-  return bestCandidate;
+  }
+  return palette;
 }
 
 function stableBarColorMap(companyId, segmentKeys = []) {
@@ -2531,20 +2535,26 @@ function stableBarColorMap(companyId, segmentKeys = []) {
   const orderedKeys = [...new Set(segmentKeys.filter(Boolean))];
   const brandPalette = companyBrandBarPalette(normalizedCompanyId, Math.max(orderedKeys.length + 2, 8));
   const companySlotOverrides = BAR_SEGMENT_COLOR_SLOT_OVERRIDES_BY_COMPANY[normalizedCompanyId] || null;
+  const canUseCandidateColor = (candidateColor) =>
+    !!candidateColor &&
+    !usedColors.includes(candidateColor) &&
+    !usedColors.some((existingColor) => barColorsAreTooSimilar(candidateColor, existingColor));
   orderedKeys.forEach((segmentKey) => {
     const preferredSlot = companySlotOverrides?.[segmentKey] ?? BAR_SEGMENT_COLOR_SLOT_OVERRIDES[segmentKey];
     if (preferredSlot === null || preferredSlot === undefined) return;
-    const candidate = pickBestBarPaletteColor(brandPalette, usedColors, [preferredSlot]);
-    if (!candidate) return;
+    const candidate = brandPalette[preferredSlot % brandPalette.length];
+    if (!canUseCandidateColor(candidate)) return;
     colorMap[segmentKey] = candidate;
     usedColors.push(candidate);
   });
   const primaryKey = orderedKeys[0];
   if (primaryKey && !colorMap[primaryKey]) {
-    const preferredCandidate = pickBestBarPaletteColor(brandPalette, usedColors, [0, 1, 2]);
-    if (preferredCandidate) {
-      colorMap[primaryKey] = preferredCandidate;
-      usedColors.push(preferredCandidate);
+    for (let index = 0; index < brandPalette.length; index += 1) {
+      const candidate = brandPalette[index];
+      if (!canUseCandidateColor(candidate)) continue;
+      colorMap[primaryKey] = candidate;
+      usedColors.push(candidate);
+      break;
     }
     if (!colorMap[primaryKey]) {
       for (let index = 0; index < brandPalette.length; index += 1) {
@@ -2563,12 +2573,13 @@ function stableBarColorMap(companyId, segmentKeys = []) {
   orderedKeys.forEach((segmentKey) => {
     if (colorMap[segmentKey]) return;
     const seed = hashStringDeterministic(`${normalizedCompanyId || "global"}:${segmentKey}`);
-    const preferredIndexes = Array.from({ length: brandPalette.length }, (_, offset) => (seed + offset * 3) % brandPalette.length);
-    const bestCandidate = pickBestBarPaletteColor(brandPalette, usedColors, preferredIndexes);
-    if (bestCandidate) {
-      colorMap[segmentKey] = bestCandidate;
-      usedColors.push(bestCandidate);
-      return;
+    for (let offset = 0; offset < brandPalette.length; offset += 1) {
+      const color = brandPalette[(seed + offset) % brandPalette.length];
+      if (canUseCandidateColor(color)) {
+        colorMap[segmentKey] = color;
+        usedColors.push(color);
+        return;
+      }
     }
     for (let offset = 0; offset < brandPalette.length; offset += 1) {
       const color = brandPalette[(seed + offset) % brandPalette.length];
@@ -2664,18 +2675,60 @@ function stackedBarSegmentElement(x, y, width, height, radius, isTop, isBottom, 
   return `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${width.toFixed(2)}" height="${height.toFixed(2)}" fill="${fillColor}"></rect>`;
 }
 
-function resolveBarQuarterDisplayConfig(company, entry = null, structurePayload = null) {
+const companyFxFallbackScaleCache = new WeakMap();
+
+function companyFxFallbackByCurrency(company) {
+  if (!company || typeof company !== "object") return {};
+  const cached = companyFxFallbackScaleCache.get(company);
+  if (cached) return cached;
+  const samplesByCurrency = new Map();
+  Object.values(company?.financials || {}).forEach((quarterEntry) => {
+    const sourceCurrency = String(quarterEntry?.statementCurrency || "").toUpperCase();
+    const displayCurrency = String(quarterEntry?.displayCurrency || "").toUpperCase();
+    const scale = safeNumber(quarterEntry?.displayScaleFactor, null);
+    if (!sourceCurrency || sourceCurrency === "USD" || displayCurrency !== "USD" || !(scale > 0.000001) || Math.abs(scale - 1) < 0.000001) return;
+    if (!samplesByCurrency.has(sourceCurrency)) {
+      samplesByCurrency.set(sourceCurrency, []);
+    }
+    samplesByCurrency.get(sourceCurrency).push(scale);
+  });
+  const fallbackByCurrency = {};
+  samplesByCurrency.forEach((samples, currency) => {
+    const median = medianNumber(samples);
+    if (median > 0.000001) {
+      fallbackByCurrency[currency] = Number(median.toFixed(6));
+    }
+  });
+  companyFxFallbackScaleCache.set(company, fallbackByCurrency);
+  return fallbackByCurrency;
+}
+
+function resolveQuarterDisplayConfig(company, entry = null, structurePayload = null) {
   const fromEntryScale = safeNumber(entry?.displayScaleFactor, null);
   const fromStructureScale = safeNumber(structurePayload?.displayScaleFactor, null);
-  const scaleFactor = fromEntryScale > 0 ? fromEntryScale : fromStructureScale > 0 ? fromStructureScale : 1;
-  const displayCurrency =
+  let scaleFactor = fromEntryScale > 0 ? fromEntryScale : fromStructureScale > 0 ? fromStructureScale : 1;
+  let displayCurrency =
     String(entry?.displayCurrency || structurePayload?.displayCurrency || entry?.statementCurrency || company?.reportingCurrency || "USD").toUpperCase() || "USD";
   const sourceCurrency = String(entry?.statementCurrency || company?.reportingCurrency || displayCurrency || "USD").toUpperCase() || displayCurrency || "USD";
+  const fallbackScale = companyFxFallbackByCurrency(company)?.[sourceCurrency];
+  if (
+    sourceCurrency !== "USD" &&
+    fallbackScale > 0.000001 &&
+    (displayCurrency !== "USD" || Math.abs(scaleFactor - 1) < 0.000001)
+  ) {
+    displayCurrency = "USD";
+    scaleFactor = fallbackScale;
+  }
   return {
     displayScaleFactor: scaleFactor,
     displayCurrency,
     sourceCurrency,
+    usesFxConversion: sourceCurrency !== "USD" && displayCurrency === "USD" && Math.abs(scaleFactor - 1) > 0.000001,
   };
+}
+
+function resolveBarQuarterDisplayConfig(company, entry = null, structurePayload = null) {
+  return resolveQuarterDisplayConfig(company, entry, structurePayload);
 }
 
 function scaleBarSegmentRows(rows = [], scaleFactor = 1) {
@@ -3036,7 +3089,7 @@ function selectQuarterBarSource(company, entry, structurePayload = null) {
   if (shouldUseOfficialGroupCandidate(company, entry, structurePayload)) {
     let groups = null;
     try {
-      groups = buildOfficialBusinessGroups(company, entry);
+      groups = buildOfficialBusinessGroups(company, entry, { includeSyntheticResidual: false });
     } catch (_error) {
       groups = null;
     }
@@ -3401,7 +3454,7 @@ function alignQuarterRowsToAnchorRegime(company, quarter, anchorQuarter) {
   };
 }
 
-function buildRevenueSegmentBarHistory(company, anchorQuarterKey, maxQuarters = 30) {
+function buildRevenueSegmentBarHistory(company, anchorQuarterKey, maxQuarters = 30, options = {}) {
   const structureQuarterMap =
     company?.officialRevenueStructureHistory?.quarters && typeof company.officialRevenueStructureHistory.quarters === "object"
       ? company.officialRevenueStructureHistory.quarters
@@ -3428,28 +3481,6 @@ function buildRevenueSegmentBarHistory(company, anchorQuarterKey, maxQuarters = 
   });
   if (!allValidQuarterKeys.length) return null;
 
-  const companyFxSamplesByCurrency = new Map();
-  Object.values(company?.financials || {}).forEach((entry) => {
-    const sourceCurrency = String(entry?.statementCurrency || "").toUpperCase();
-    const displayCurrency = String(entry?.displayCurrency || "").toUpperCase();
-    const scale = safeNumber(entry?.displayScaleFactor, null);
-    if (!sourceCurrency || sourceCurrency === "USD" || displayCurrency !== "USD" || !(scale > 0.000001) || Math.abs(scale - 1) < 0.000001) return;
-    if (!companyFxSamplesByCurrency.has(sourceCurrency)) {
-      companyFxSamplesByCurrency.set(sourceCurrency, []);
-    }
-    companyFxSamplesByCurrency.get(sourceCurrency).push(scale);
-  });
-  const companyFxFallbackByCurrency = {};
-  companyFxSamplesByCurrency.forEach((samples, currency) => {
-    const sorted = [...samples].sort((left, right) => left - right);
-    if (!sorted.length) return;
-    const middleIndex = Math.floor(sorted.length / 2);
-    const median = sorted.length % 2 ? sorted[middleIndex] : (sorted[middleIndex - 1] + sorted[middleIndex]) / 2;
-    if (median > 0.000001) {
-      companyFxFallbackByCurrency[currency] = Number(median.toFixed(6));
-    }
-  });
-
   const windowSize = Math.max(1, Math.floor(safeNumber(maxQuarters, 30)));
   const resolvedAnchorQuarterKey =
     (anchorQuarterKey && parseQuarterKey(anchorQuarterKey) && anchorQuarterKey) || allValidQuarterKeys[allValidQuarterKeys.length - 1] || null;
@@ -3464,25 +3495,19 @@ function buildRevenueSegmentBarHistory(company, anchorQuarterKey, maxQuarters = 
   const usesNonQuarterDisplayWindow =
     !!company?.classificationPolicy?.displayOfficiallyClassifiedPeriodsOnly &&
     displayPeriodTypes.some((item) => item === "half-year" || item === "annual");
-  const requestedWindowCount = usesNonQuarterDisplayWindow ? selectedQuarterKeys.length : windowSize;
+  const requestedWindowCount =
+    usesNonQuarterDisplayWindow || selectedQuarterKeys.length < windowSize ? selectedQuarterKeys.length : windowSize;
   const windowUnitLabel = usesNonQuarterDisplayWindow ? "periods" : "quarters";
   const windowUnitLabelZh = usesNonQuarterDisplayWindow ? "个披露期" : "个季度";
+  const includeAllQuarters = options?.includeAllQuarters === true;
+  const historyQuarterKeys = allValidQuarterKeys;
 
-  let quarters = selectedQuarterKeys.map((quarterKey) => {
+  let quarters = historyQuarterKeys.map((quarterKey) => {
     const entry = company.financials?.[quarterKey] || null;
     const structurePayload = structureQuarterMap?.[quarterKey] || null;
     const sourceSelection = selectQuarterBarSource(company, entry, structurePayload);
     const rawSegments = sourceSelection.rows;
     const displayConfig = resolveBarQuarterDisplayConfig(company, entry, structurePayload);
-    const fallbackFxScale = companyFxFallbackByCurrency[displayConfig.sourceCurrency];
-    if (
-      displayConfig.sourceCurrency !== "USD" &&
-      fallbackFxScale > 0.000001 &&
-      (displayConfig.displayCurrency !== "USD" || Math.abs(displayConfig.displayScaleFactor - 1) < 0.000001)
-    ) {
-      displayConfig.displayCurrency = "USD";
-      displayConfig.displayScaleFactor = fallbackFxScale;
-    }
     const scaledSegments = scaleBarSegmentRows(rawSegments, displayConfig.displayScaleFactor);
     const scaledSegmentSum = scaledSegments.reduce((sum, item) => sum + safeNumber(item.valueBn), 0);
     const revenueBnRaw = safeNumber(entry?.revenueBn, null);
@@ -3762,6 +3787,24 @@ function buildRevenueSegmentBarHistory(company, anchorQuarterKey, maxQuarters = 
       quarterHasLegacyNvidiaSchema(quarter)
     );
   };
+  const quarterAllowsAggressiveNeighborRebalance = (quarter) => {
+    const rawCoverage = safeNumber(quarter?.rawCoverageRatio, null);
+    const totalRevenueBn = Math.max(safeNumber(quarter?.totalRevenueBn), 0.001);
+    const residualShare = safeNumber(quarter?.segmentMap?.otherrevenue, 0) / totalRevenueBn;
+    const rawSource = String(quarter?.rawSegmentSource || "");
+    const hasTrustedReportedSegments =
+      quarter?.hasRawSegments &&
+      !quarter?.wasReportedOnlyRaw &&
+      !quarter?.insufficientSegments &&
+      !quarter?.isBackfilledSegments &&
+      !quarter?.isImputedSegments &&
+      rawSource !== "fallback-reported" &&
+      rawSource !== "none" &&
+      !quarterHasConceptualTaxonomy(quarter) &&
+      (rawCoverage === null || (rawCoverage >= 0.94 && rawCoverage <= 1.12)) &&
+      residualShare <= 0.05;
+    return !hasTrustedReportedSegments;
+  };
   const canUseExtendedTemplateFill = (quarter, templateIndex) => {
     if (quarter.allowsSyntheticHarmonization) return true;
     if (!Number.isInteger(templateIndex)) return false;
@@ -3994,6 +4037,11 @@ function buildRevenueSegmentBarHistory(company, anchorQuarterKey, maxQuarters = 
     const quarter = quarters[index];
     const residualRow = quarter.segmentRows.find((item) => item?.key === "otherrevenue") || null;
     if (!quarter?.hasRevenueValue || !residualRow || quarter.rawSegmentSource === "official-groups") continue;
+    const preserveHighCoverageOfficialBreakout =
+      (quarter.rawSegmentSource === "official-segments" || quarter.rawSegmentSource === "structure-history") &&
+      safeNumber(quarter.rawCoverageRatio, 0) >= 0.85 &&
+      (quarter.rawSegmentRows || []).filter((item) => item?.key && item.key !== "reportedrevenue").length >= 2;
+    if (preserveHighCoverageOfficialBreakout) continue;
     const previousQuarter = quarters[index - 1];
     const nextQuarter = quarters[index + 1];
     const previousKeys = stableQuarterKeys(previousQuarter);
@@ -4273,6 +4321,7 @@ function buildRevenueSegmentBarHistory(company, anchorQuarterKey, maxQuarters = 
     });
 
     const shouldRebalance =
+      quarterAllowsAggressiveNeighborRebalance(quarter) &&
       maxShareDeviation > 0.3 &&
       topShare > 0.68 &&
       revenueJumpRatio < 1.3 &&
@@ -4302,9 +4351,13 @@ function buildRevenueSegmentBarHistory(company, anchorQuarterKey, maxQuarters = 
         : `${quarter.reconciliationMode}+neighbor-share-rebalanced`;
   }
 
+  const visibleQuarterKeySet = new Set(includeAllQuarters ? allValidQuarterKeys : selectedQuarterKeys);
+  const visibleQuarters = quarters.filter((quarter) => visibleQuarterKeySet.has(quarter.quarterKey));
+  if (!visibleQuarters.length) return null;
+
   const totals = new Map();
   const nameRegistry = new Map();
-  quarters.forEach((quarter) => {
+  visibleQuarters.forEach((quarter) => {
     quarter.segmentRows.forEach((item) => {
       totals.set(item.key, (totals.get(item.key) || 0) + safeNumber(item.valueBn));
       if (!nameRegistry.has(item.key)) {
@@ -4331,7 +4384,7 @@ function buildRevenueSegmentBarHistory(company, anchorQuarterKey, maxQuarters = 
       name: "Other segments",
       nameZh: "其他分部",
     });
-    quarters.forEach((quarter) => {
+    visibleQuarters.forEach((quarter) => {
       let otherValue = 0;
       const nextMap = {};
       Object.entries(quarter.segmentMap).forEach(([key, value]) => {
@@ -4351,7 +4404,7 @@ function buildRevenueSegmentBarHistory(company, anchorQuarterKey, maxQuarters = 
           : Object.values(nextMap).reduce((sum, value) => sum + safeNumber(value), 0);
     });
     totals.clear();
-    quarters.forEach((quarter) => {
+    visibleQuarters.forEach((quarter) => {
       Object.entries(quarter.segmentMap).forEach(([key, value]) => {
         totals.set(key, (totals.get(key) || 0) + safeNumber(value));
       });
@@ -4371,22 +4424,22 @@ function buildRevenueSegmentBarHistory(company, anchorQuarterKey, maxQuarters = 
     color: colorBySegment[segmentKey],
   }));
 
-  const displayCurrencySet = [...new Set(quarters.map((item) => item.displayCurrency).filter(Boolean))];
-  const sourceCurrencySet = [...new Set(quarters.map((item) => item.sourceCurrency).filter(Boolean))];
-  const convertedQuarterCount = quarters.filter((item) => Math.abs(safeNumber(item.displayScaleFactor, 1) - 1) > 0.000001).length;
-  const availableQuarterCount = quarters.filter((item) => item.hasRevenueValue).length;
-  const missingQuarterCount = Math.max(0, quarters.length - availableQuarterCount);
-  const imputedQuarterCount = quarters.filter((item) => item.isImputedSegments).length;
-  const smoothedQuarterCount = quarters.filter((item) => item.isSmoothedSegments).length;
-  const reportedSegmentQuarterCount = quarters.filter((item) => item.hasRawSegments && !item.wasReportedOnlyRaw && !item.insufficientSegments).length;
+  const displayCurrencySet = [...new Set(visibleQuarters.map((item) => item.displayCurrency).filter(Boolean))];
+  const sourceCurrencySet = [...new Set(visibleQuarters.map((item) => item.sourceCurrency).filter(Boolean))];
+  const convertedQuarterCount = visibleQuarters.filter((item) => Math.abs(safeNumber(item.displayScaleFactor, 1) - 1) > 0.000001).length;
+  const availableQuarterCount = visibleQuarters.filter((item) => item.hasRevenueValue).length;
+  const missingQuarterCount = Math.max(0, visibleQuarters.length - availableQuarterCount);
+  const imputedQuarterCount = visibleQuarters.filter((item) => item.isImputedSegments).length;
+  const smoothedQuarterCount = visibleQuarters.filter((item) => item.isSmoothedSegments).length;
+  const reportedSegmentQuarterCount = visibleQuarters.filter((item) => item.hasRawSegments && !item.wasReportedOnlyRaw && !item.insufficientSegments).length;
   const primaryDisplayCurrency = displayCurrencySet.length === 1 ? displayCurrencySet[0] : "MIXED";
 
   return {
-    quarters,
+    quarters: visibleQuarters,
     segmentStats,
     colorBySegment,
     stackOrder: segmentStats.slice().sort((left, right) => left.totalValueBn - right.totalValueBn).map((item) => item.key),
-    maxRevenueBn: Math.max(...quarters.map((item) => safeNumber(item.totalRevenueBn)), 1),
+    maxRevenueBn: Math.max(...visibleQuarters.map((item) => safeNumber(item.totalRevenueBn)), 1),
     anchorQuarterKey: selectedQuarterKeys[selectedQuarterKeys.length - 1] || null,
     requestedQuarterCount: requestedWindowCount,
     availableQuarterCount,

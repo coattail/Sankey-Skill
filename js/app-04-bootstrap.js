@@ -298,10 +298,9 @@ function renderRevenueSegmentBarsSvg(snapshot, company, options = {}) {
     valueScale,
     history,
   });
-  const isNonUsCompany = !!company?.isAdr;
-  const fxNoteY = isNonUsCompany ? height - 34 : chartTop - 10;
-  const fxNoteX = isNonUsCompany ? 38 : plotLeft;
-  const fxNoteFontSize = isNonUsCompany ? 20 : 18;
+  const fxNoteY = hasConvertedCurrency ? height - 34 : chartTop - 10;
+  const fxNoteX = hasConvertedCurrency ? 38 : plotLeft;
+  const fxNoteFontSize = hasConvertedCurrency ? 20 : 18;
 
   let svg = `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(chartTitle)}">
@@ -464,9 +463,12 @@ function renderIncomeStatementSvg(snapshot, company) {
       : Math.max(revenue - grossProfit, 0);
   const rawOperatingProfit = Number(snapshot.operatingProfitBn || 0);
   const hasOperatingLoss = rawOperatingProfit < -0.02;
+  const operatingOutcomeLoss = isLossMakingOperatingOutcome(snapshot);
   const operatingProfit = hasOperatingLoss ? 0 : rawOperatingProfit;
   const operatingExpenses =
-    snapshot.operatingExpensesBn !== null && snapshot.operatingExpensesBn !== undefined
+    snapshot.displayOperatingExpensesBn !== null && snapshot.displayOperatingExpensesBn !== undefined
+      ? Math.max(Number(snapshot.displayOperatingExpensesBn || 0), 0)
+      : snapshot.operatingExpensesBn !== null && snapshot.operatingExpensesBn !== undefined
       ? hasOperatingLoss
         ? Math.min(Number(snapshot.operatingExpensesBn || 0), grossProfit)
         : Number(snapshot.operatingExpensesBn || 0)
@@ -503,6 +505,11 @@ function renderIncomeStatementSvg(snapshot, company) {
   const opHeight = Math.max(operatingProfit * scale, 2);
   const opexHeight = Math.max(operatingExpenses * scale, 2);
   const netHeight = Math.max(netProfit * scale, nearZeroNet ? 4 : 2);
+  const operatingOutcomeLabel = resolvedOperatingOutcomeLabel(snapshot);
+  const operatingOutcomeValueText = formatOperatingOutcomeBillions(snapshot);
+  const operatingOutcomeNodeFill = operatingOutcomeLoss ? expenseNode : profitNode;
+  const operatingOutcomeTextFill = operatingOutcomeLoss ? "#8C1F0A" : "#089256";
+  const showOperatingOutcomeBridge = !hasOperatingLoss && opHeight > 0.5;
 
   const revenueTop = centerY - revenueHeight / 2;
   const revenueBottom = centerY + revenueHeight / 2;
@@ -603,12 +610,12 @@ function renderIncomeStatementSvg(snapshot, company) {
       <text x="${grossX + nodeWidth / 2}" y="${fallbackExpenseBaselineY(costBottom)}" text-anchor="middle" font-size="${fallbackExpenseTitleSize}" font-weight="800" fill="#8C1F0A">${escapeHtml(localizeChartPhrase("Cost of revenue"))}</text>
       <text x="${grossX + nodeWidth / 2}" y="${fallbackExpenseBaselineY(costBottom) + 30}" text-anchor="middle" font-size="${fallbackExpenseValueSize}" font-weight="800" fill="#8C1F0A">${escapeHtml(formatBillions(costOfRevenue, true))}</text>
 
-      <path d="${flowPath(grossX + nodeWidth, grossTop, opBottom, opX, opTop, opBottom)}" fill="${profitFill}" opacity="0.96"></path>
-      <path d="${flowPath(grossX + nodeWidth, opBottom, grossBottom, opX, opexTop, opexBottom)}" fill="${expenseFill}" opacity="0.96"></path>
+      ${showOperatingOutcomeBridge ? `<path d="${flowPath(grossX + nodeWidth, grossTop, opBottom, opX, opTop, opBottom)}" fill="${operatingOutcomeLoss ? expenseFill : profitFill}" opacity="0.96"></path>` : ""}
+      <path d="${flowPath(grossX + nodeWidth, hasOperatingLoss ? grossTop : opBottom, grossBottom, opX, opexTop, opexBottom)}" fill="${expenseFill}" opacity="0.96"></path>
 
-      <rect x="${opX}" y="${opTop.toFixed(1)}" width="${nodeWidth}" height="${opHeight.toFixed(1)}" fill="${profitNode}"></rect>
-      <text x="${opX + nodeWidth / 2}" y="${opTop - 28}" text-anchor="middle" font-size="26" font-weight="800" fill="#089256">${escapeHtml(localizeChartPhrase("Operating profit"))}</text>
-      <text x="${opX + nodeWidth / 2}" y="${opTop + 2}" text-anchor="middle" font-size="26" font-weight="800" fill="#089256">${escapeHtml(formatBillions(operatingProfit))}</text>
+      <rect x="${opX}" y="${opTop.toFixed(1)}" width="${nodeWidth}" height="${opHeight.toFixed(1)}" fill="${operatingOutcomeNodeFill}"></rect>
+      <text x="${opX + nodeWidth / 2}" y="${opTop - 28}" text-anchor="middle" font-size="26" font-weight="800" fill="${operatingOutcomeTextFill}">${escapeHtml(localizeChartPhrase(operatingOutcomeLabel))}</text>
+      <text x="${opX + nodeWidth / 2}" y="${opTop + 2}" text-anchor="middle" font-size="26" font-weight="800" fill="${operatingOutcomeTextFill}">${escapeHtml(operatingOutcomeValueText)}</text>
       <text x="${opX + nodeWidth / 2}" y="${opTop + 28}" text-anchor="middle" font-size="16" fill="#666666">${escapeHtml(formatPct(snapshot.operatingMarginPct))} ${marginLabel()}</text>
       ${snapshot.operatingMarginYoyDeltaPp !== null && snapshot.operatingMarginYoyDeltaPp !== undefined ? `<text x="${opX + nodeWidth / 2}" y="${opTop + 52}" text-anchor="middle" font-size="15" fill="#666666">${escapeHtml(formatPp(snapshot.operatingMarginYoyDeltaPp))}</text>` : ""}
 
@@ -932,7 +939,7 @@ function updateMeta(snapshot, company, viewPayload = null) {
         ? "当前季度使用统一高精复刻模板生成，并按参考样板参数校准业务板块布局。"
         : "当前季度使用统一高精复刻模板自动生成；如果缺少分部数据，会保留同一套汇聚/分散主桥并自动收敛为单收入块。";
     refs.detailStatementSummary.textContent = `${formatBillions(snapshot.revenueBn)} → ${formatNetOutcomeBillions(snapshot)}`;
-    refs.detailStatementNote.textContent = `毛利 ${formatBillions(snapshot.grossProfitBn)} / 营业利润 ${formatBillions(snapshot.operatingProfitBn)}`;
+    refs.detailStatementNote.textContent = `毛利 ${formatBillions(snapshot.grossProfitBn)} / ${localizeChartPhrase(resolvedOperatingOutcomeLabel(snapshot))} ${formatOperatingOutcomeBillions(snapshot)}`;
     refs.detailSourceTitle.textContent = snapshot.sourceLabel;
     refs.detailSourceNote.textContent = snapshot.footnote;
     refs.footnoteText.textContent = snapshot.footnote;
